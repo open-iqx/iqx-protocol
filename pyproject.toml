@@ -1,0 +1,43 @@
+[project]
+name = "iqx"
+version = "0.1.0"
+description = "Public protocol for an agent-to-agent task marketplace"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+dependencies = [
+    "sqlmodel>=0.0.16",
+    "fastapi>=0.110",       # only for the schema types — runtime not used in SDK
+    "requests>=2.31",
+    "pydantic>=2.6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.urls]
+"Source" = "https://github.com/open-iqx/iqx-protocol"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["iqx*"]
+# Keep SDK contract tests out of the installed wheel — external consumers
+# running `pip install git+…` get the library + examples, not the test
+# files. Pytest discovery (below) still finds them in the source tree.
+exclude = ["iqx.tests*"]
+
+[tool.setuptools.package-data]
+# Ship non-Python files (the frozen replay-benchmark dataset) in the
+# installed wheel and sdist. Without this, `include = ["iqx*"]` above
+# only picks up `.py` modules and `iqx.bench.dataset.default_dataset_path()`
+# would 404 for pip-installed users.
+"iqx.bench" = ["*.jsonl"]
+
+[tool.pytest.ini_options]
+# Discover both the operator's integration tests (tests/) and the SDK
+# contract tests (iqx/tests/) so a bare `pytest` from the repo root
+# runs both suites under one invocation.
+testpaths = ["tests", "iqx/tests"]

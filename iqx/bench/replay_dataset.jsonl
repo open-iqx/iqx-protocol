@@ -1,0 +1,27 @@
+# IQX replay benchmark — frozen ground-truth dataset.
+#
+# Format: one JSON object per line (JSONL). Lines starting with '#' or
+# blank lines are treated as comments and skipped by the loader.
+#
+# This is the v0.1 seed dataset. Hand-curated to:
+#   - mirror the wire shape ``boss_smart_money`` emits in ``signal_data``;
+#   - cover both ``verdict_was_alpha=true`` (price moved >= +3% in 4h)
+#     and ``verdict_was_alpha=false`` (price did not) outcomes;
+#   - use exactly 4 of each, so the always-skeptical baseline Worker
+#     lands at exactly 4/8 (50.0%) — clean floor, maximum visible
+#     headroom for a smarter Worker.
+#
+# Curators: keep this file deterministic. The shipped contract tests
+# lock the per-record count and the baseline-accuracy fraction;
+# changing either requires updating the corresponding test and is
+# intentional, not incidental.
+#
+# Field reference: see iqx/bench/dataset.py.
+{"id": "rec01", "verification_method": "worker_prediction_accuracy_4h", "signal_data": {"chain": "arbitrum", "wallet": "0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b", "token_address": "0x912CE59144191C1204E64559FE8253a0e49E6548", "token_symbol": "ARB", "price_at_signal_usd": 1.234, "eth_price_at_signal_usd": 2000.0, "direction": "up", "observed_at": 1700000000}, "verdict_was_alpha": true, "verdict_notes": "actual +5.2% over 4h horizon (above +3% threshold)"}
+{"id": "rec02", "verification_method": "worker_prediction_accuracy_4h", "signal_data": {"chain": "arbitrum", "wallet": "0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c", "token_address": "0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a", "token_symbol": "GMX", "price_at_signal_usd": 42.50, "eth_price_at_signal_usd": 2010.0, "direction": "up", "observed_at": 1700100000}, "verdict_was_alpha": true, "verdict_notes": "actual +12.4% over 4h horizon (above +3% threshold)"}
+{"id": "rec03", "verification_method": "worker_prediction_accuracy_4h", "signal_data": {"chain": "arbitrum", "wallet": "0x3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d", "token_address": "0x539bdE0d7Dbd336b79148AA742883198BBF60342", "token_symbol": "MAGIC", "price_at_signal_usd": 0.482, "eth_price_at_signal_usd": 1990.0, "direction": "up", "observed_at": 1700200000}, "verdict_was_alpha": true, "verdict_notes": "actual +3.7% over 4h horizon (above +3% threshold)"}
+{"id": "rec04", "verification_method": "worker_prediction_accuracy_4h", "signal_data": {"chain": "arbitrum", "wallet": "0x4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e", "token_address": "0x13Ad51ed4F1B7e9Dc168d8a00cB3f4dDD85EfA60", "token_symbol": "LDO", "price_at_signal_usd": 2.105, "eth_price_at_signal_usd": 2020.0, "direction": "up", "observed_at": 1700300000}, "verdict_was_alpha": true, "verdict_notes": "actual +8.9% over 4h horizon (above +3% threshold)"}
+{"id": "rec05", "verification_method": "worker_prediction_accuracy_4h", "signal_data": {"chain": "arbitrum", "wallet": "0x5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f", "token_address": "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4", "token_symbol": "LINK", "price_at_signal_usd": 14.32, "eth_price_at_signal_usd": 2005.0, "direction": "up", "observed_at": 1700400000}, "verdict_was_alpha": false, "verdict_notes": "actual +0.4% over 4h horizon (below +3% threshold)"}
+{"id": "rec06", "verification_method": "worker_prediction_accuracy_4h", "signal_data": {"chain": "arbitrum", "wallet": "0x6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a", "token_address": "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", "token_symbol": "WBTC", "price_at_signal_usd": 43250.0, "eth_price_at_signal_usd": 1995.0, "direction": "up", "observed_at": 1700500000}, "verdict_was_alpha": false, "verdict_notes": "actual -2.1% over 4h horizon (below +3% threshold)"}
+{"id": "rec07", "verification_method": "worker_prediction_accuracy_4h", "signal_data": {"chain": "arbitrum", "wallet": "0x7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b", "token_address": "0x3d9907F9a368ad0a51Be60f7Da3b97cf940982D8", "token_symbol": "GRAIL", "price_at_signal_usd": 1380.5, "eth_price_at_signal_usd": 2015.0, "direction": "up", "observed_at": 1700600000}, "verdict_was_alpha": false, "verdict_notes": "actual +1.8% over 4h horizon (below +3% threshold)"}
+{"id": "rec08", "verification_method": "worker_prediction_accuracy_4h", "signal_data": {"chain": "arbitrum", "wallet": "0x8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c", "token_address": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8", "token_symbol": "USDC.e", "price_at_signal_usd": 1.0001, "eth_price_at_signal_usd": 2025.0, "direction": "up", "observed_at": 1700700000}, "verdict_was_alpha": false, "verdict_notes": "actual -5.6% over 4h horizon (below +3% threshold)"}
