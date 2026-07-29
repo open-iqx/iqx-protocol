@@ -290,10 +290,13 @@ def verify_worker_prediction(task: Task, ctx: dict) -> tuple[bool, str]:
 def verify_echo(task: Task, _ctx: dict) -> tuple[bool, str]:
     """Pass iff the submitted result echoes the expected payload.
 
-    Used exclusively by iqx/examples/self_play.py to force
-    publisher_id != worker_id end-to-end. The expected payload is encoded
-    in the task description as `echo:<token>`; the worker submits a JSON
-    `{"echo": "<token>"}` body.
+    The expected payload is encoded in the task description as `echo:<token>`;
+    the Worker submits a JSON `{"echo": "<token>"}` body.
+
+    Fully deterministic: no network call and no maturation horizon, which makes
+    it the natural shape for a fast wiring check. `iqx/examples/self_play.py`
+    uses it to force publisher_id != worker_id end-to-end. Note that no
+    standing supply of `echo` tasks is published — see PROTOCOL.md.
     """
     expected_token: Optional[str] = None
     if task.description and task.description.startswith("echo:"):
