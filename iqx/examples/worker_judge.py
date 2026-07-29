@@ -1,9 +1,20 @@
 """Wallet-history Judge Worker — example independent Worker for the role-split.
 
-Polls the IQX dispatcher for open Boss tasks published by smart_money under
+**Side-effect class: Worker registration / submission.** Unless run with
+``--dry-run`` it registers an Agent identity and submits answers.
+
+**Uses the LEGACY single-claim path.** It calls ``POST /tasks/{id}/claim`` then
+``POST /tasks/{id}/submit``, so the first Worker to claim a task locks the
+others out, and the legacy path applies a provisional ELO change at submit time
+rather than at grading time. Production Workers compete through
+``POST /tasks/{id}/submissions`` instead. This example predates that path and is
+kept on the legacy one for compatibility; see ``PROTOCOL.md`` for the current
+lifecycle and do not treat this loop as the onboarding shape.
+
+Polls the node for open Boss tasks published under
 `verification_method=worker_prediction_accuracy_4h`, claims them, and submits
 a structured verdict `{is_alpha, confidence, reasoning, evidence_tx,
-predicted_4h_return_pct}`.
+predicted_4h_return_pct}`. The answer schema is documented in ``PROTOCOL.md``.
 
 The verdict is informed by two **optional** complementary signals — when
 their cache files are available under ``STATE_DIR``, the Judge uses them
@@ -55,11 +66,28 @@ from typing import Optional
 
 import requests
 
+from iqx.examples.identity import (
+    DEFAULT_BASE_URL,
+    SideEffect,
+    add_identity_args,
+    announce_identities,
+    guard_writes,
+    key_path_for,
+    resolve_agent_id,
+    resolve_base_url,
+    side_effect_epilog,
+)
 from iqx.helpers.state import resolve_state_dir
+
+SIDE_EFFECT = SideEffect.WORKER
 
 # ---- agent identity ----------------------------------------------------------
 
-WORKER_ID = "wallet-history-judge-v1"
+# Resolved per run: the default is freshly generated, so two consecutive runs
+# use two distinct identities and neither collides with an id already registered
+# on the target node. Pin one with --agent-id or $IQX_JUDGE_WORKER_ID.
+WORKER_ID_PREFIX = "wallet-history-judge"
+WORKER_ID_ENV = "IQX_JUDGE_WORKER_ID"
 WORKER_NAME = "Wallet History Judge"
 
 # Tasks we'll claim are filtered down by:
@@ -72,21 +100,24 @@ DEFAULT_VERIFICATION_METHOD = "worker_prediction_accuracy_4h"
 POLL_INTERVAL_SEC = 5 * 60   # 5 min — same cadence as the Boss
 REQUEST_TIMEOUT_SEC = 20
 
-BASE_URL = os.environ.get("IQX_BASE_URL", "http://localhost:8000")
+# Resolved without validation at import time so importing the module can never
+# fail on a malformed environment; ``main`` re-resolves it through
+# ``resolve_base_url`` (which validates and fails safely) before any write.
+BASE_URL = os.environ.get("IQX_BASE_URL", DEFAULT_BASE_URL)
 
 # ---- paths -------------------------------------------------------------------
 
 # STATE_DIR resolution policy: see iqx.helpers.state.resolve_state_dir().
-# Three files live under it:
-#   - ``wallet_history_judge.key`` — dispatcher credential for
-#     WORKER_ID. Basename is stable across deployments so the existing
-#     credential remains valid; no re-registration on restart.
+# Three kinds of file live under it:
+#   - ``<agent-id>.key``  — the node credential, derived from the resolved
+#     agent id (see ``iqx.examples.identity.key_path_for``, which appends a
+#     digest for ids that are not filename-safe). Pinning the id keeps the
+#     same credential across restarts; a generated id mints a new one.
 #   - ``wallet_pnl.json`` — produced by an offline compute script.
 #   - ``bot_army.json``   — produced by an offline compute script.
 # Both cache producers stay operator-private; only this consumer ships
 # in the SDK examples.
 STATE_DIR = resolve_state_dir()
-KEY_PATH = STATE_DIR / "wallet_history_judge.key"
 WALLET_PNL_PATH = STATE_DIR / "wallet_pnl.json"
 BOT_ARMY_PATH = STATE_DIR / "bot_army.json"
 
@@ -106,52 +137,50 @@ CONFIDENCE_DEFAULT = 0.5
 # ---- agent identity / auth ---------------------------------------------------
 
 
-def _register() -> str:
+def _register(worker_id: str) -> str:
+    key_path = key_path_for(worker_id)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     resp = requests.post(
         f"{BASE_URL}/agents/register",
-        json={"id": WORKER_ID, "name": WORKER_NAME},
+        json={"id": worker_id, "name": WORKER_NAME},
         timeout=REQUEST_TIMEOUT_SEC,
     )
     if resp.status_code == 409:
-        # The dispatcher does not silently rotate an existing agent's key
-        # via /agents/register — a 409 here means either we lost our local
-        # key file, or another caller registered under our id. We can't
-        # recover via POST /agents/{id}/rotate-key from this code path
-        # because that endpoint requires the current key, which is exactly
-        # what we lack. Surface clearly and crash; auto-recovery here would
-        # be the DoS surface the dispatcher's auth model is designed to close.
+        # The node does not silently rotate an existing agent's key via
+        # /agents/register — a 409 here means either we lost our local key
+        # file, or another caller registered under this id. We cannot recover
+        # via POST /agents/{id}/rotate-key from this code path because that
+        # endpoint requires the current key, which is exactly what is missing.
+        # Surface clearly and crash; auto-recovery here would be the DoS
+        # surface the node's auth model is designed to close.
         print(
-            f"[registry] {WORKER_ID} already registered with a different "
-            f"api_key. If you lost the local key file, ask an admin to "
-            f"delete the agent row (then this worker will register fresh "
-            f"on next start); if this is a fresh deploy clashing with a "
-            f"stale id, choose a new WORKER_ID. Crashing — no silent "
-            f"recovery.",
+            f"[registry] {worker_id} is already registered with a different "
+            f"api_key. Re-run without pinning an id to generate a fresh one, "
+            f"or restore the key file at {key_path}. Crashing — no silent "
+            f"recovery. See TROUBLESHOOTING.md.",
             flush=True,
         )
     resp.raise_for_status()
     api_key = resp.json()["api_key"]
-    KEY_PATH.write_text(api_key)
-    print(f"[registry] registered {WORKER_ID}; api_key saved to {KEY_PATH}",
+    key_path.write_text(api_key)
+    print(f"[registry] registered {worker_id}; api_key saved to {key_path}",
           flush=True)
     return api_key
 
 
-def _cached_key_authenticates(key: str) -> bool:
-    """True iff `key` still authenticates as WORKER_ID on the dispatcher.
+def _cached_key_authenticates(worker_id: str, key: str) -> bool:
+    """True iff `key` still authenticates as `worker_id` on the node.
 
-    Replaces the older _agent_exists_on_server() check, which only
-    confirmed the row existed — not that our cached key still matched
-    it. The old check let a stale cached key persist silently across any
-    legitimate DB-state divergence (an explicit `/agents/{id}/rotate-key`
-    issued by another operator process, a dispatcher DB restore / reset,
-    a prior-deployment legacy rotation, or any external drift between
-    the on-disk key file and the dispatcher's stored value), so the
-    worker would 403 on every /claim with no diagnostic signal. The
-    dispatcher's `POST /agents/register` does NOT rotate existing keys
-    (duplicate id returns 409 — see register_agent in main.py); rotation
-    requires authenticated `POST /agents/{id}/rotate-key`.
+    Checked against ``GET /agents/me``, which requires the key. A public
+    unauthenticated ``GET /agents/{id}`` would confirm only that the row exists
+    — not that the cached key still matches it — so a stale cached key would
+    persist silently across any legitimate state divergence (an explicit
+    ``POST /agents/{id}/rotate-key`` issued by another process, a node DB
+    restore or reset, or any drift between the on-disk key file and the stored
+    value), and the Worker would then 403 on every write with no diagnostic
+    signal. ``POST /agents/register`` does NOT rotate existing keys — a
+    duplicate id returns 409; rotation requires the authenticated rotate
+    endpoint. See ``PROTOCOL.md``.
 
     Network failures return True so the real error surfaces on the next
     HTTP call rather than triggering a spurious re-register storm.
@@ -159,7 +188,7 @@ def _cached_key_authenticates(key: str) -> bool:
     try:
         resp = requests.get(
             f"{BASE_URL}/agents/me",
-            headers={"X-Worker-Id": WORKER_ID, "X-API-Key": key},
+            headers={"X-Worker-Id": worker_id, "X-API-Key": key},
             timeout=REQUEST_TIMEOUT_SEC,
         )
     except requests.RequestException:
@@ -167,24 +196,26 @@ def _cached_key_authenticates(key: str) -> bool:
     return resp.status_code == 200
 
 
-def ensure_registered() -> str:
+def ensure_registered(worker_id: str) -> str:
     """Re-register if our cached credential no longer works.
 
     Two paths to re-register:
-      - KEY_PATH missing entirely (fresh install, deleted cache).
-      - Cached key fails the /agents/me round-trip (dispatcher rotated it,
-        DB was reset and re-populated by another caller, etc.).
+      - the key file for this identity is missing entirely (fresh install,
+        deleted cache, or a newly generated agent id);
+      - the cached key fails the /agents/me round-trip (it was rotated, or the
+        node's state was reset and re-populated by another caller).
     """
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    if KEY_PATH.exists():
-        key = KEY_PATH.read_text().strip()
-        if key and _cached_key_authenticates(key):
+    key_path = key_path_for(worker_id)
+    if key_path.exists():
+        key = key_path.read_text().strip()
+        if key and _cached_key_authenticates(worker_id, key):
             return key
         if key:
             print(f"[registry] cached key no longer authenticates for "
-                  f"{WORKER_ID} (rotated or dispatcher state changed); "
+                  f"{worker_id} (rotated or node state changed); "
                   f"re-registering", flush=True)
-    return _register()
+    return _register(worker_id)
 
 
 # ---- cache loading -----------------------------------------------------------
@@ -312,7 +343,7 @@ def fetch_open_tasks(publisher_id: str, verification_method: str) -> list[dict]:
     ]
 
 
-def claim_task(task_id: str, api_key: str) -> bool:
+def claim_task(task_id: str, api_key: str, worker_id: str) -> bool:
     """Attempt to claim. Returns True on success; False on 400/409 (claim
     rejected for a recoverable reason) so the loop can move on. Anything
     else is raised.
@@ -329,7 +360,7 @@ def claim_task(task_id: str, api_key: str) -> bool:
     try:
         resp = requests.post(
             f"{BASE_URL}/tasks/{task_id}/claim",
-            json={"worker_id": WORKER_ID},
+            json={"worker_id": worker_id},
             headers={"X-API-Key": api_key},
             timeout=REQUEST_TIMEOUT_SEC,
         )
@@ -349,10 +380,11 @@ def claim_task(task_id: str, api_key: str) -> bool:
         raise
 
 
-def submit_verdict(task_id: str, verdict: dict, api_key: str) -> None:
+def submit_verdict(task_id: str, verdict: dict, api_key: str,
+                   worker_id: str) -> None:
     resp = requests.post(
         f"{BASE_URL}/tasks/{task_id}/submit",
-        json={"worker_id": WORKER_ID, "result": json.dumps(verdict)},
+        json={"worker_id": worker_id, "result": json.dumps(verdict)},
         headers={"X-API-Key": api_key},
         timeout=REQUEST_TIMEOUT_SEC,
     )
@@ -366,6 +398,7 @@ def grade_one_task(
     task: dict,
     *,
     api_key: Optional[str],
+    worker_id: str,
     wallet_pnl: dict,
     bot_army: dict,
     dry_run: bool,
@@ -398,9 +431,9 @@ def grade_one_task(
         return True
 
     assert api_key is not None
-    if not claim_task(task_id, api_key):
+    if not claim_task(task_id, api_key, worker_id):
         return False
-    submit_verdict(task_id, verdict, api_key)
+    submit_verdict(task_id, verdict, api_key, worker_id)
     print(f"[judge] task {task_id[:8]} ({wallet_short} → {sym}): submitted "
           f"{pred_label} @ {verdict['confidence']} — {verdict['reasoning']}",
           flush=True)
@@ -410,6 +443,7 @@ def grade_one_task(
 def run_once(
     *,
     api_key: Optional[str],
+    worker_id: str,
     publisher_id: str,
     verification_method: str,
     dry_run: bool,
@@ -436,6 +470,7 @@ def run_once(
             if grade_one_task(
                 task,
                 api_key=api_key,
+                worker_id=worker_id,
                 wallet_pnl=wallet_pnl,
                 bot_army=bot_army,
                 dry_run=dry_run,
@@ -448,8 +483,14 @@ def run_once(
 
 
 def main() -> int:
+    global BASE_URL
     parser = argparse.ArgumentParser(
         description="Wallet-history Judge Worker — example independent Worker",
+        epilog=side_effect_epilog(
+            SIDE_EFFECT,
+            "Uses the legacy single-claim path, which is NOT the path a "
+            "competing-submissions Worker uses. See PROTOCOL.md.",
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--once", action="store_true",
@@ -463,12 +504,25 @@ def main() -> int:
     parser.add_argument("--verification-method", default=DEFAULT_VERIFICATION_METHOD,
                         help=f"Method we know how to satisfy "
                              f"(default {DEFAULT_VERIFICATION_METHOD})")
+    add_identity_args(parser, env_var=WORKER_ID_ENV, prefix=WORKER_ID_PREFIX)
     args = parser.parse_args()
 
+    BASE_URL = resolve_base_url()
+    worker_id, source = resolve_agent_id(
+        WORKER_ID_PREFIX, cli_value=args.agent_id, env_var=WORKER_ID_ENV,
+    )
+    identities = [("worker", worker_id, source)]
+
     if args.dry_run:
+        # No write happens, so no opt-in is required — but still show exactly
+        # which identity a real run would create.
+        announce_identities(identities, base_url=BASE_URL,
+                            side_effect=SIDE_EFFECT)
         api_key = None
     else:
-        api_key = ensure_registered()
+        guard_writes(identities, base_url=BASE_URL, side_effect=SIDE_EFFECT,
+                     cli_opt_in=args.allow_public_writes)
+        api_key = ensure_registered(worker_id)
 
     if args.loop:
         print(f"[judge] starting continuous loop (interval={POLL_INTERVAL_SEC}s, "
@@ -478,6 +532,7 @@ def main() -> int:
             try:
                 run_once(
                     api_key=api_key,
+                    worker_id=worker_id,
                     publisher_id=args.publisher_id,
                     verification_method=args.verification_method,
                     dry_run=args.dry_run,
@@ -488,6 +543,7 @@ def main() -> int:
     else:
         run_once(
             api_key=api_key,
+            worker_id=worker_id,
             publisher_id=args.publisher_id,
             verification_method=args.verification_method,
             dry_run=args.dry_run,

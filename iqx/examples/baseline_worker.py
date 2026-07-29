@@ -1,5 +1,15 @@
 """Baseline / reference Worker — the SDK's default counter-party.
 
+**Side-effect class: Worker registration / submission.** Unless run with
+``--dry-run`` it registers an Agent identity and submits answers.
+
+**Uses the LEGACY single-claim path.** It calls ``POST /tasks/{id}/claim`` then
+``POST /tasks/{id}/submit``, so the first Worker to claim a task locks the
+others out. Production Workers compete through ``POST /tasks/{id}/submissions``
+instead. This example predates that path and is kept on the legacy one for
+compatibility; see ``PROTOCOL.md`` for the current lifecycle and do not treat
+this loop as the onboarding shape.
+
 Purpose:
   Ship a small, deterministic Worker that runs out of the box with **zero
   side data** so external Boss authors get an immediate counter-party
@@ -70,11 +80,28 @@ from typing import Optional
 
 import requests
 
+from iqx.examples.identity import (
+    DEFAULT_BASE_URL,
+    SideEffect,
+    add_identity_args,
+    announce_identities,
+    guard_writes,
+    key_path_for,
+    resolve_agent_id,
+    resolve_base_url,
+    side_effect_epilog,
+)
 from iqx.helpers.state import resolve_state_dir
+
+SIDE_EFFECT = SideEffect.WORKER
 
 # ---- agent identity ----------------------------------------------------------
 
-WORKER_ID = "baseline-worker-v1"
+# Resolved per run: the default is freshly generated, so two consecutive runs
+# use two distinct identities and neither collides with an id already
+# registered on the target node. Pin one with --agent-id or $IQX_BASELINE_WORKER_ID.
+WORKER_ID_PREFIX = "baseline-worker"
+WORKER_ID_ENV = "IQX_BASELINE_WORKER_ID"
 WORKER_NAME = "Baseline Reference Worker"
 
 # Methods this Worker is *capable* of answering. Kept intentionally narrow —
@@ -97,7 +124,10 @@ DEFAULT_METHODS: tuple[str, ...] = ("echo",)
 POLL_INTERVAL_SEC = 5 * 60   # 5 min — match worker_judge / self_play
 REQUEST_TIMEOUT_SEC = 20
 
-BASE_URL = os.environ.get("IQX_BASE_URL", "http://localhost:8000")
+# Resolved without validation at import time so importing the module can never
+# fail on a malformed environment; ``main`` re-resolves it through
+# ``resolve_base_url`` (which validates and fails safely) before any write.
+BASE_URL = os.environ.get("IQX_BASE_URL", DEFAULT_BASE_URL)
 
 # Verdict-shape constants for worker_prediction_accuracy_4h. Centralised so
 # tests can import them and assert against the same values the runtime uses.
@@ -112,54 +142,53 @@ BASELINE_REASONING = (
 # ---- paths -------------------------------------------------------------------
 
 # STATE_DIR resolution policy: see iqx.helpers.state.resolve_state_dir().
+# The credential file is derived from the resolved agent id — see
+# ``iqx.examples.identity.key_path_for``.
 STATE_DIR = resolve_state_dir()
-KEY_PATH = STATE_DIR / "baseline_worker.key"
 
 
 # ---- agent identity / auth ---------------------------------------------------
 
 
-def _register() -> str:
+def _register(worker_id: str) -> str:
+    key_path = key_path_for(worker_id)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     resp = requests.post(
         f"{BASE_URL}/agents/register",
-        json={"id": WORKER_ID, "name": WORKER_NAME},
+        json={"id": worker_id, "name": WORKER_NAME},
         timeout=REQUEST_TIMEOUT_SEC,
     )
     if resp.status_code == 409:
-        # See iqx/examples/worker_judge.py:_register for the full rationale.
-        # The dispatcher does not silently rotate existing keys; we can't
-        # auto-rotate because /agents/{id}/rotate-key requires the current
-        # key, which is exactly what we lack here.
+        # The node does not silently rotate existing keys, and we cannot
+        # auto-rotate because POST /agents/{id}/rotate-key requires the current
+        # key — exactly what is missing here. See TROUBLESHOOTING.md.
         print(
-            f"[registry] {WORKER_ID} already registered with a different "
-            f"api_key. If you lost the local key file, ask an admin to "
-            f"delete the agent row; if this is a fresh deploy clashing with "
-            f"a stale id, choose a new WORKER_ID. Crashing — no silent "
+            f"[registry] {worker_id} is already registered with a different "
+            f"api_key. Re-run without pinning an id to generate a fresh one, "
+            f"or restore the key file at {key_path}. Crashing — no silent "
             f"recovery.",
             flush=True,
         )
     resp.raise_for_status()
     api_key = resp.json()["api_key"]
-    KEY_PATH.write_text(api_key)
-    print(f"[registry] registered {WORKER_ID}; api_key saved to {KEY_PATH}",
+    key_path.write_text(api_key)
+    print(f"[registry] registered {worker_id}; api_key saved to {key_path}",
           flush=True)
     return api_key
 
 
-def _cached_key_authenticates(key: str) -> bool:
-    """True iff `key` still authenticates as WORKER_ID on the dispatcher.
+def _cached_key_authenticates(worker_id: str, key: str) -> bool:
+    """True iff `key` still authenticates as `worker_id` on the node.
 
-    See worker_judge._cached_key_authenticates for the full rationale —
-    same shape, same trap: the old _agent_exists_on_server check was a
-    public unauthenticated GET that confirmed the row existed without
-    proving the cached key still matched it, so a stale key persisted
-    silently across any external re-register.
+    Checked against ``GET /agents/me``, which requires the key. A public
+    unauthenticated ``GET /agents/{id}`` would confirm only that the row exists,
+    not that the cached key still matches it — so a stale key would persist
+    silently.
     """
     try:
         resp = requests.get(
             f"{BASE_URL}/agents/me",
-            headers={"X-Worker-Id": WORKER_ID, "X-API-Key": key},
+            headers={"X-Worker-Id": worker_id, "X-API-Key": key},
             timeout=REQUEST_TIMEOUT_SEC,
         )
     except requests.RequestException:
@@ -168,20 +197,20 @@ def _cached_key_authenticates(key: str) -> bool:
     return resp.status_code == 200
 
 
-def ensure_registered() -> str:
-    """Self-heal pattern from iqx/examples/worker_judge.py: re-register if our
-    cached credential no longer authenticates (dispatcher rotated it, iqx.db
-    wiped while the cached .key survived, etc.)."""
+def ensure_registered(worker_id: str) -> str:
+    """Re-register if the cached credential no longer authenticates (the key was
+    rotated, or the node's state changed under a surviving local .key file)."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    if KEY_PATH.exists():
-        key = KEY_PATH.read_text().strip()
-        if key and _cached_key_authenticates(key):
+    key_path = key_path_for(worker_id)
+    if key_path.exists():
+        key = key_path.read_text().strip()
+        if key and _cached_key_authenticates(worker_id, key):
             return key
         if key:
             print(f"[registry] cached key no longer authenticates for "
-                  f"{WORKER_ID} (rotated or dispatcher state changed); "
+                  f"{worker_id} (rotated or node state changed); "
                   f"re-registering", flush=True)
-    return _register()
+    return _register(worker_id)
 
 
 # ---- verdict builders --------------------------------------------------------
@@ -286,7 +315,7 @@ def fetch_open_tasks(
     return out
 
 
-def claim_task(task_id: str, api_key: str) -> bool:
+def claim_task(task_id: str, api_key: str, worker_id: str) -> bool:
     """Attempt to claim. Returns True on success; False on 400/409 (claim
     rejected for a recoverable reason) so the loop can move on. Anything
     else is raised.
@@ -301,7 +330,7 @@ def claim_task(task_id: str, api_key: str) -> bool:
     try:
         resp = requests.post(
             f"{BASE_URL}/tasks/{task_id}/claim",
-            json={"worker_id": WORKER_ID},
+            json={"worker_id": worker_id},
             headers={"X-API-Key": api_key},
             timeout=REQUEST_TIMEOUT_SEC,
         )
@@ -320,10 +349,11 @@ def claim_task(task_id: str, api_key: str) -> bool:
         raise
 
 
-def submit_result(task_id: str, payload: dict, api_key: str) -> None:
+def submit_result(task_id: str, payload: dict, api_key: str,
+                  worker_id: str) -> None:
     resp = requests.post(
         f"{BASE_URL}/tasks/{task_id}/submit",
-        json={"worker_id": WORKER_ID, "result": json.dumps(payload)},
+        json={"worker_id": worker_id, "result": json.dumps(payload)},
         headers={"X-API-Key": api_key},
         timeout=REQUEST_TIMEOUT_SEC,
     )
@@ -337,6 +367,7 @@ def grade_one_task(
     task: dict,
     *,
     api_key: Optional[str],
+    worker_id: str,
     dry_run: bool,
 ) -> bool:
     """Process one task: build verdict, claim, submit. Returns True on a
@@ -357,9 +388,9 @@ def grade_one_task(
         return True
 
     assert api_key is not None
-    if not claim_task(task_id, api_key):
+    if not claim_task(task_id, api_key, worker_id):
         return False
-    submit_result(task_id, payload, api_key)
+    submit_result(task_id, payload, api_key, worker_id)
     print(f"[baseline] task {task_id[:8]} ({method}): submitted "
           f"{json.dumps(payload, sort_keys=True)}", flush=True)
     return True
@@ -368,6 +399,7 @@ def grade_one_task(
 def run_once(
     *,
     api_key: Optional[str],
+    worker_id: str,
     methods: tuple[str, ...],
     publisher_id: Optional[str],
     dry_run: bool,
@@ -391,7 +423,8 @@ def run_once(
     submitted = 0
     for task in eligible:
         try:
-            if grade_one_task(task, api_key=api_key, dry_run=dry_run):
+            if grade_one_task(task, api_key=api_key, worker_id=worker_id,
+                              dry_run=dry_run):
                 submitted += 1
         except requests.RequestException as e:
             tid = task.get("id", "?")[:8]
@@ -413,10 +446,16 @@ def _parse_methods(arg: str) -> tuple[str, ...]:
 
 
 def main() -> int:
+    global BASE_URL
     parser = argparse.ArgumentParser(
         description="Baseline / reference Worker — defaults to claiming "
                     "echo (toy) tasks only. Default-skeptical defi_alpha "
                     "prediction mode requires explicit --methods opt-in.",
+        epilog=side_effect_epilog(
+            SIDE_EFFECT,
+            "Uses the legacy single-claim path, which is NOT the path a "
+            "competing-submissions Worker uses. See PROTOCOL.md.",
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--once", action="store_true",
@@ -439,12 +478,25 @@ def main() -> int:
                              f"silently steal them from smarter Workers. "
                              f"Use prediction mode for demo / replay / "
                              f"intentionally empty-market runs only.")
+    add_identity_args(parser, env_var=WORKER_ID_ENV, prefix=WORKER_ID_PREFIX)
     args = parser.parse_args()
 
+    BASE_URL = resolve_base_url()
+    worker_id, source = resolve_agent_id(
+        WORKER_ID_PREFIX, cli_value=args.agent_id, env_var=WORKER_ID_ENV,
+    )
+    identities = [("worker", worker_id, source)]
+
     if args.dry_run:
+        # No write happens, so no opt-in is required — but still show exactly
+        # which identity a real run would create.
+        announce_identities(identities, base_url=BASE_URL,
+                            side_effect=SIDE_EFFECT)
         api_key = None
     else:
-        api_key = ensure_registered()
+        guard_writes(identities, base_url=BASE_URL, side_effect=SIDE_EFFECT,
+                     cli_opt_in=args.allow_public_writes)
+        api_key = ensure_registered(worker_id)
 
     if args.loop:
         scope = ",".join(args.methods)
@@ -456,6 +508,7 @@ def main() -> int:
             try:
                 run_once(
                     api_key=api_key,
+                    worker_id=worker_id,
                     methods=args.methods,
                     publisher_id=args.publisher_id,
                     dry_run=args.dry_run,
@@ -466,6 +519,7 @@ def main() -> int:
     else:
         run_once(
             api_key=api_key,
+            worker_id=worker_id,
             methods=args.methods,
             publisher_id=args.publisher_id,
             dry_run=args.dry_run,

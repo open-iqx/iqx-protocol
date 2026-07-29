@@ -1,5 +1,12 @@
 """Smart-money cluster monitoring agent — Boss-only example.
 
+**Side-effect class: Boss / task publishing.** Unless run with ``--dry-run`` it
+registers a publisher identity and publishes tasks.
+
+**Operator-oriented.** Public Boss onboarding is not offered, and this example
+is not a public quickstart: publishing tasks affects what every Worker on the
+node is graded against. It ships as a readable reference for the Boss role.
+
 Polls Etherscan V2's multichain account API per watchlisted address on
 Arbitrum. Groups transfers by tx hash to identify swaps (the wallet appears on
 both `from` and `to` sides of the same tx, with at least one non-quote-asset
@@ -109,10 +116,31 @@ from iqx.helpers.price import (
     coingecko_market_chart_range,
     coingecko_price,
 )
+from iqx.examples.identity import (
+    DEFAULT_BASE_URL,
+    SideEffect,
+    add_identity_args,
+    announce_identities,
+    generate_agent_id,
+    guard_writes,
+    key_path_for,
+    resolve_agent_id,
+    resolve_base_url,
+    side_effect_epilog,
+)
 
 # ---- agent identity ----------------------------------------------------------
 
-AGENT_ID = "smart-money-monitor-v1"
+SIDE_EFFECT = SideEffect.BOSS
+
+# Resolved per run. The module-level default is freshly generated on import, so
+# two consecutive runs use two distinct identities and neither collides with an
+# id already registered on the target node; ``main`` rebinds it after reading
+# --agent-id / $IQX_BOSS_AGENT_ID. An operator re-attaching to an existing
+# deployment pins the id explicitly.
+AGENT_ID_PREFIX = "smart-money-monitor"
+AGENT_ID_ENV = "IQX_BOSS_AGENT_ID"
+AGENT_ID = generate_agent_id(AGENT_ID_PREFIX)
 AGENT_NAME = "Smart Money Monitor"
 SIGNAL_TYPE = "smart_money_swap_cluster"
 TASK_TYPE = "defi_alpha"
@@ -352,7 +380,10 @@ _pool_classification_cache: dict[tuple[str, str], bool] = {}
 
 # ---- paths -------------------------------------------------------------------
 
-BASE_URL = os.environ.get("IQX_BASE_URL", "http://localhost:8000")
+# Resolved without validation at import time so importing the module can never
+# fail on a malformed environment; ``main`` re-resolves it through
+# ``resolve_base_url`` (which validates and fails safely) before any write.
+BASE_URL = os.environ.get("IQX_BASE_URL", DEFAULT_BASE_URL)
 ETHERSCAN_API_KEY = os.environ.get("ETHERSCAN_API_KEY", "")
 ETHERSCAN_BASE = "https://api.etherscan.io/v2/api"
 # COINGECKO_BASE lives in iqx/helpers/price.py; re-exported via the
@@ -360,9 +391,10 @@ ETHERSCAN_BASE = "https://api.etherscan.io/v2/api"
 
 # STATE_DIR resolution policy: see iqx.helpers.state.resolve_state_dir().
 # Four files live under it:
-#   - ``smart_money.key``            — dispatcher credential for AGENT_ID
-#     ``smart-money-monitor-v1``. Basenames are stable across deployments
-#     so existing credentials remain valid; no re-registration on restart.
+#   - ``<agent-id>.key``            — node credential, derived from the resolved
+#     agent id (see ``iqx.examples.identity.key_path_for``, which appends a
+#     digest for ids that are not filename-safe). Pinning the id keeps the
+#     same credential across restarts; a generated id mints a new one.
 #   - ``smart_money.json``           — per-(chain, address) block cursors,
 #     rolling buffers, dedup history.
 #   - ``smart_money_watchlist.json`` — operator-edited watchlist.
@@ -372,7 +404,6 @@ ETHERSCAN_BASE = "https://api.etherscan.io/v2/api"
 #     load_watchlist handles gracefully — locked by
 #     iqx/tests/test_state.py).
 STATE_DIR = resolve_state_dir()
-KEY_PATH = STATE_DIR / "smart_money.key"
 STATE_PATH = STATE_DIR / "smart_money.json"
 WATCHLIST_PATH = STATE_DIR / "smart_money_watchlist.json"
 WATCHLIST_EXAMPLE_PATH = (
@@ -405,7 +436,7 @@ class SmartMoneyConfig:
       - ``base_url``, ``etherscan_api_key`` — used by HTTP helpers
         from module-level ``BASE_URL`` / ``ETHERSCAN_API_KEY``
       - ``state_dir`` — used by load_state/save_state/ensure_registered
-        from module-level ``STATE_DIR`` / ``KEY_PATH`` / ``STATE_PATH``
+        from module-level ``STATE_DIR`` / ``STATE_PATH``
       - ``poll_interval_sec`` — read from module ``POLL_INTERVAL_SEC``
         inside ``SmartMoneyBoss.loop()``
     """
@@ -440,6 +471,7 @@ class SmartMoneyConfig:
 # ---- agent identity / auth -------------------------------------------------
 
 def _register() -> str:
+    key_path = key_path_for(AGENT_ID)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     resp = requests.post(
         f"{BASE_URL}/agents/register",
@@ -447,33 +479,30 @@ def _register() -> str:
         timeout=REQUEST_TIMEOUT_SEC,
     )
     if resp.status_code == 409:
-        # See iqx/examples/worker_judge.py:_register for the full rationale.
-        # The dispatcher does not silently rotate existing keys; we can't
-        # auto-rotate because /agents/{id}/rotate-key requires the current
-        # key, which is exactly what we lack here.
+        # The node does not silently rotate existing keys, and we cannot
+        # auto-rotate because POST /agents/{id}/rotate-key requires the current
+        # key — exactly what is missing here. See TROUBLESHOOTING.md.
         print(
-            f"[registry] {AGENT_ID} already registered with a different "
-            f"api_key. If you lost the local key file, ask an admin to "
-            f"delete the agent row; if this is a fresh deploy clashing with "
-            f"a stale id, choose a new AGENT_ID. Crashing — no silent "
+            f"[registry] {AGENT_ID} is already registered with a different "
+            f"api_key. Re-run without pinning an id to generate a fresh one, "
+            f"or restore the key file at {key_path}. Crashing — no silent "
             f"recovery.",
             flush=True,
         )
     resp.raise_for_status()
     api_key = resp.json()["api_key"]
-    KEY_PATH.write_text(api_key)
-    print(f"[registry] registered {AGENT_ID}; api_key saved to {KEY_PATH}", flush=True)
+    key_path.write_text(api_key)
+    print(f"[registry] registered {AGENT_ID}; api_key saved to {key_path}", flush=True)
     return api_key
 
 
 def _cached_key_authenticates(key: str) -> bool:
-    """True iff `key` still authenticates as AGENT_ID on the dispatcher.
+    """True iff `key` still authenticates as AGENT_ID on the node.
 
-    See worker_judge._cached_key_authenticates for the full rationale —
-    same shape, same trap: the old _agent_exists_on_server check was a
-    public unauthenticated GET that confirmed the row existed without
-    proving the cached key still matched it, so a stale key persisted
-    silently across any external re-register.
+    Checked against ``GET /agents/me``, which requires the key. A public
+    unauthenticated ``GET /agents/{id}`` would confirm only that the row exists,
+    not that the cached key still matches it — so a stale key would persist
+    silently.
     """
     try:
         resp = requests.get(
@@ -488,14 +517,15 @@ def _cached_key_authenticates(key: str) -> bool:
 
 def ensure_registered() -> str:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    if KEY_PATH.exists():
-        key = KEY_PATH.read_text().strip()
+    key_path = key_path_for(AGENT_ID)
+    if key_path.exists():
+        key = key_path.read_text().strip()
         if key and _cached_key_authenticates(key):
             return key
         if key:
             print(
                 f"[registry] cached key no longer authenticates for "
-                f"{AGENT_ID} (rotated or dispatcher state changed); "
+                f"{AGENT_ID} (rotated or node state changed); "
                 f"re-registering",
                 flush=True,
             )
@@ -1625,7 +1655,13 @@ class SmartMoneyBoss:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Smart-money cluster monitoring agent")
+    global AGENT_ID, BASE_URL
+    parser = argparse.ArgumentParser(
+        description="Smart-money cluster monitoring agent (Boss; "
+                    "operator-oriented)",
+        epilog=side_effect_epilog(SIDE_EFFECT),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--threshold-usd", type=float, default=MIN_TOTAL_USD,
                         help=f"Min cluster notional in USD (default {MIN_TOTAL_USD})")
     parser.add_argument("--dry-run", action="store_true",
@@ -1640,7 +1676,14 @@ def main() -> int:
                              "even when no transfers are returned — distinguishes "
                              "'wallet asleep' from 'scanner skipped a range'. "
                              "Off by default to keep --loop stdout clean.")
+    add_identity_args(parser, env_var=AGENT_ID_ENV, prefix=AGENT_ID_PREFIX)
     args = parser.parse_args()
+
+    BASE_URL = resolve_base_url()
+    AGENT_ID, source = resolve_agent_id(
+        AGENT_ID_PREFIX, cli_value=args.agent_id, env_var=AGENT_ID_ENV,
+    )
+    identities = [("publisher", AGENT_ID, source)]
 
     config = SmartMoneyConfig.from_env_and_args(args)
     boss = SmartMoneyBoss(config)
@@ -1659,9 +1702,14 @@ def main() -> int:
 
     # Register the publisher identity for hygiene (publisher_id refers to
     # a real agent record), but discard the api_key — Boss-mode smart_money
-    # posts to the unauthenticated /tasks endpoint and never claims or
-    # submits, so no header auth is needed.
-    if not args.dry_run:
+    # posts to the /tasks endpoint and never claims or submits, so no header
+    # auth is needed on that call today.
+    if args.dry_run:
+        announce_identities(identities, base_url=BASE_URL,
+                            side_effect=SIDE_EFFECT)
+    else:
+        guard_writes(identities, base_url=BASE_URL, side_effect=SIDE_EFFECT,
+                     cli_opt_in=args.allow_public_writes)
         boss.ensure_registered()
 
     if args.loop:
