@@ -1,27 +1,35 @@
 """Self-play loop — exercises publisher_id != worker_id end-to-end.
 
+**Side-effect class: Boss / task publishing.** This example publishes a task
+*and* answers it, so it writes on both sides. It is operator-oriented plumbing,
+not a public quickstart.
+
+**This example uses the LEGACY single-claim path, which is not the onboarding
+path.** It walks ``POST /tasks`` → ``POST /tasks/{id}/claim`` →
+``POST /tasks/{id}/submit``: the first Worker to claim a task locks every other
+Worker out. Production Workers compete through ``POST /tasks/{id}/submissions``
+instead, where many Workers answer the same task independently. The legacy path
+is kept here only because this demo's purpose is to exercise the
+``publisher_id != worker_id`` codepath end-to-end, and it remains live for
+compatibility. See ``PROTOCOL.md`` for the difference — do not copy this shape
+when writing a Worker.
+
 Two logical agent identities share one process:
-  * Publisher (`selfplay-publisher-v1`) creates a task with the `echo`
-    verification_method and a known token in the description.
-  * Worker (`selfplay-worker-v1`) claims and submits an `echo` payload
-    matching that token.
+  * a Publisher that creates a task with the `echo` verification_method and a
+    known token in the description;
+  * a Worker that claims and submits an `echo` payload matching that token.
 
-The task uses `task_type="defi_alpha"` (the same production category external
-agents will see) and `verification_method="echo"`. The verifier's `echo`
-handler grades the submission deterministically — this whole loop is plumbing,
-not a real signal.
+Both ids default to a freshly generated value on every run, so two consecutive
+runs use two distinct identities and never collide on an already-registered id.
 
-The point: force the codepath where the publisher and worker are different
-agents to actually run, even before any external Worker joins the live node.
-Once the protocol opens publicly, this same shape carries unchanged.
+The task uses `task_type="defi_alpha"` and `verification_method="echo"`. The
+verifier's `echo` handler grades the submission deterministically — this whole
+loop is plumbing, not a real signal.
 
 Usage (module form is canonical):
+    python3 -m iqx.examples.self_play --dry-run  # print intent, no HTTP
     python3 -m iqx.examples.self_play --once     # one round (default)
     python3 -m iqx.examples.self_play --loop     # poll forever
-    python3 -m iqx.examples.self_play --dry-run  # print intent, no HTTP
-
-This script is a developer/demo plumbing test for the
-``publisher_id != worker_id`` codepath, not a live-production agent.
 """
 
 from __future__ import annotations
@@ -37,34 +45,49 @@ from typing import Optional
 
 import requests
 
+from iqx.examples.identity import (
+    DEFAULT_BASE_URL,
+    SideEffect,
+    add_identity_args,
+    guard_writes,
+    key_path_for,
+    resolve_agent_id,
+    resolve_base_url,
+    side_effect_epilog,
+)
 from iqx.helpers.state import resolve_state_dir
 
-PUBLISHER_ID = "selfplay-publisher-v1"
+SIDE_EFFECT = SideEffect.BOSS
+
+PUBLISHER_ID_PREFIX = "selfplay-publisher"
+PUBLISHER_ID_ENV = "IQX_SELFPLAY_PUBLISHER_ID"
 PUBLISHER_NAME = "Self-Play Publisher"
-WORKER_ID = "selfplay-worker-v1"
+WORKER_ID_PREFIX = "selfplay-worker"
+WORKER_ID_ENV = "IQX_SELFPLAY_WORKER_ID"
 WORKER_NAME = "Self-Play Worker"
 
 TASK_TYPE = "defi_alpha"
 VERIFICATION_METHOD = "echo"
 VERIFICATION_MODE = "automatic"
-# Echo tasks resolve quickly; set the deadline 60s in the past so the verifier
-# picks the task up on its very next pass without a wall-clock wait.
+# Legacy-path only. The legacy claim/submit path has no deadline gate, so
+# backdating the deadline simply lets the poller pick the task up on its next
+# pass without a wall-clock wait. This does NOT transfer to the competing-
+# submissions path, which rejects any submission once the deadline has passed —
+# a backdated task there would refuse every answer.
 VERIFICATION_BACKDATE_SEC = 60
 
 POLL_INTERVAL_SEC = 5 * 60  # 5 minutes
 REQUEST_TIMEOUT_SEC = 20
 
-BASE_URL = os.environ.get("IQX_BASE_URL", "http://localhost:8000")
+# Resolved without validation at import time so importing the module can never
+# fail on a malformed environment; ``main`` re-resolves it through
+# ``resolve_base_url`` (which validates and fails safely) before any write.
+BASE_URL = os.environ.get("IQX_BASE_URL", DEFAULT_BASE_URL)
 
 # STATE_DIR resolution policy: see iqx.helpers.state.resolve_state_dir().
-# Two credential files live under it:
-#   - ``self_play_publisher.key`` (selfplay-publisher-v1)
-#   - ``self_play_worker.key``    (selfplay-worker-v1)
-# Both keys are registered at the central node on first run; subsequent
-# runs reuse the cached keys.
+# One credential file per identity, named after the resolved agent id — see
+# ``iqx.examples.identity.key_path_for``.
 STATE_DIR = resolve_state_dir()
-PUBLISHER_KEY_PATH = STATE_DIR / "self_play_publisher.key"
-WORKER_KEY_PATH = STATE_DIR / "self_play_worker.key"
 
 
 # ---- agent identity / auth (one helper, two identities) ----------------------
@@ -78,15 +101,14 @@ def _register(agent_id: str, agent_name: str, key_path: Path) -> str:
         timeout=REQUEST_TIMEOUT_SEC,
     )
     if resp.status_code == 409:
-        # See iqx/examples/worker_judge.py:_register for the full rationale.
-        # The dispatcher does not silently rotate existing keys; we can't
-        # auto-rotate because /agents/{id}/rotate-key requires the current
-        # key, which is exactly what we lack here.
+        # The dispatcher does not silently rotate existing keys, and we cannot
+        # auto-rotate because POST /agents/{id}/rotate-key requires the current
+        # key — exactly what is missing here. See TROUBLESHOOTING.md.
         print(
-            f"[registry] {agent_id} already registered with a different "
-            f"api_key. If you lost {key_path}, ask an admin to delete the "
-            f"agent row; if this is a fresh deploy clashing with a stale id, "
-            f"choose a different agent_id. Crashing — no silent recovery.",
+            f"[registry] {agent_id} is already registered with a different "
+            f"api_key. Re-run without pinning an id to generate a fresh one, "
+            f"or restore the key file at {key_path}. Crashing — no silent "
+            f"recovery.",
             flush=True,
         )
     resp.raise_for_status()
@@ -98,13 +120,12 @@ def _register(agent_id: str, agent_name: str, key_path: Path) -> str:
 
 
 def _cached_key_authenticates(agent_id: str, key: str) -> bool:
-    """True iff `key` still authenticates as `agent_id` on the dispatcher.
+    """True iff `key` still authenticates as `agent_id` on the node.
 
-    See worker_judge._cached_key_authenticates for the full rationale —
-    same shape, same trap: the old _agent_exists_on_server check was a
-    public unauthenticated GET that confirmed the row existed without
-    proving the cached key still matched it, so a stale key persisted
-    silently across any external re-register.
+    Checked against ``GET /agents/me``, which requires the key. A public
+    unauthenticated ``GET /agents/{id}`` would confirm only that the row exists,
+    not that the cached key still matches it — so a stale key would persist
+    silently.
     """
     try:
         resp = requests.get(
@@ -136,6 +157,8 @@ def ensure_registered(agent_id: str, agent_name: str, key_path: Path) -> str:
 
 def run_round(
     *,
+    publisher_id: str,
+    worker_id: str,
     publisher_key: Optional[str],
     worker_key: Optional[str],
     dry_run: bool,
@@ -148,7 +171,7 @@ def run_round(
         "description": description,
         "budget": 0.0,
         "min_elo": 1000,
-        "publisher_id": PUBLISHER_ID,
+        "publisher_id": publisher_id,
         "task_type": TASK_TYPE,
         "verification_method": VERIFICATION_METHOD,
         "verification_mode": VERIFICATION_MODE,
@@ -157,7 +180,7 @@ def run_round(
 
     if dry_run:
         print(f"[self-play] DRY-RUN would publish task description='{description}' "
-              f"publisher={PUBLISHER_ID} worker={WORKER_ID}", flush=True)
+              f"publisher={publisher_id} worker={worker_id}", flush=True)
         return True
 
     assert publisher_key is not None
@@ -172,25 +195,26 @@ def run_round(
     resp.raise_for_status()
     task = resp.json()
     task_id = task["id"]
-    print(f"[self-play] publisher={PUBLISHER_ID} created task {task_id[:8]} "
+    print(f"[self-play] publisher={publisher_id} created task {task_id[:8]} "
           f"(echo:{token})", flush=True)
 
-    # 2. Worker (a *different* identity) claims.
+    # 2. Worker (a *different* identity) claims. Legacy path — see the module
+    # docstring; a competing-submissions Worker never calls /claim.
     resp = requests.post(
         f"{BASE_URL}/tasks/{task_id}/claim",
-        json={"worker_id": WORKER_ID},
+        json={"worker_id": worker_id},
         headers={"X-API-Key": worker_key},
         timeout=REQUEST_TIMEOUT_SEC,
     )
     resp.raise_for_status()
-    print(f"[self-play] worker={WORKER_ID} claimed task {task_id[:8]} "
+    print(f"[self-play] worker={worker_id} claimed task {task_id[:8]} "
           f"(publisher_id != worker_id ✓)", flush=True)
 
     # 3. Worker submits the echoed token.
     result_payload = json.dumps({"echo": token})
     resp = requests.post(
         f"{BASE_URL}/tasks/{task_id}/submit",
-        json={"worker_id": WORKER_ID, "result": result_payload},
+        json={"worker_id": worker_id, "result": result_payload},
         headers={"X-API-Key": worker_key},
         timeout=REQUEST_TIMEOUT_SEC,
     )
@@ -204,23 +228,59 @@ def run_round(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="IQX self-play loop")
+    global BASE_URL
+    parser = argparse.ArgumentParser(
+        description="IQX self-play loop (legacy claim path; operator-oriented)",
+        epilog=side_effect_epilog(
+            SIDE_EFFECT,
+            "Uses the legacy single-claim path, which is NOT the path a "
+            "competing-submissions Worker uses. See PROTOCOL.md.",
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--once", action="store_true",
                         help="Run a single round and exit (default)")
     parser.add_argument("--loop", action="store_true",
                         help=f"Poll forever every {POLL_INTERVAL_SEC}s")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print intent, do not register or POST")
+    add_identity_args(parser, env_var=PUBLISHER_ID_ENV,
+                      prefix=PUBLISHER_ID_PREFIX, dest="publisher_id",
+                      flag="--publisher-id")
+    add_identity_args(parser, env_var=WORKER_ID_ENV,
+                      prefix=WORKER_ID_PREFIX, dest="worker_id",
+                      flag="--worker-id")
     args = parser.parse_args()
 
+    BASE_URL = resolve_base_url()
+
+    publisher_id, publisher_src = resolve_agent_id(
+        PUBLISHER_ID_PREFIX, cli_value=args.publisher_id,
+        env_var=PUBLISHER_ID_ENV,
+    )
+    worker_id, worker_src = resolve_agent_id(
+        WORKER_ID_PREFIX, cli_value=args.worker_id, env_var=WORKER_ID_ENV,
+    )
+    identities = [
+        ("publisher", publisher_id, publisher_src),
+        ("worker", worker_id, worker_src),
+    ]
+
     if args.dry_run:
+        # No write happens, so no opt-in is required — but still show exactly
+        # which identities a real run would create.
+        from iqx.examples.identity import announce_identities
+        announce_identities(identities, base_url=BASE_URL,
+                            side_effect=SIDE_EFFECT)
         publisher_key = worker_key = None
     else:
+        guard_writes(identities, base_url=BASE_URL, side_effect=SIDE_EFFECT,
+                     cli_opt_in=args.allow_public_writes)
         publisher_key = ensure_registered(
-            PUBLISHER_ID, PUBLISHER_NAME, PUBLISHER_KEY_PATH,
+            publisher_id, PUBLISHER_NAME, key_path_for(publisher_id),
         )
         worker_key = ensure_registered(
-            WORKER_ID, WORKER_NAME, WORKER_KEY_PATH,
+            worker_id, WORKER_NAME, key_path_for(worker_id),
         )
 
     if args.loop:
@@ -229,6 +289,8 @@ def main() -> int:
         while True:
             try:
                 run_round(
+                    publisher_id=publisher_id,
+                    worker_id=worker_id,
                     publisher_key=publisher_key,
                     worker_key=worker_key,
                     dry_run=args.dry_run,
@@ -238,6 +300,8 @@ def main() -> int:
             time.sleep(POLL_INTERVAL_SEC)
     else:
         run_round(
+            publisher_id=publisher_id,
+            worker_id=worker_id,
             publisher_key=publisher_key,
             worker_key=worker_key,
             dry_run=args.dry_run,
