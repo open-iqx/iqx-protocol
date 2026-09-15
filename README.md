@@ -111,11 +111,6 @@ The `iqx/` package is the public protocol surface — installable via `pip` dire
 pip install git+https://github.com/open-iqx/iqx-protocol.git@v0.1.1
 ```
 
-> **Tag status.** `v0.1.1` is created only after the change that introduces it
-> has been reviewed and merged. Until the tag is pushed the command above does
-> not resolve; pin that change's merge commit in the meantime. This note is
-> removed once the tag exists.
-
 The **initial May 2026 SDK release tag** is still installable, and is the right
 choice only if you specifically want that first release:
 
@@ -328,7 +323,7 @@ Three published points exist, and they are **not** interchangeable:
 
 | Reference | What it is |
 |---|---|
-| `v0.1.1` | **Canonical.** The **July 2026 protocol-aligned public implementation** plus the **current research-positioning documentation** — the SDK and the documentation set this repository describes. Pin this. It is tagged only after the change introducing it is merged; see the SDK install section above. |
+| `v0.1.1` | **Canonical.** The **July 2026 protocol-aligned public implementation** plus the **current research-positioning documentation** — the SDK and the documentation set this repository describes. Pin this — see the SDK install section above for the canonical install command. |
 | `ef8184cae0e0e266b39c47818bd19efddae2572c` | Historical provenance: the July 2026 protocol-aligned implementation **as first published**. Aside from the version declaration in `iqx/__init__.py`, the public SDK implementation and runtime behavior in `v0.1.1` are unchanged from this commit. It predates the research-positioning documentation and reports `0.1.0`, and it is no longer the install to pin. |
 | `v0.1.0`, tagged 2026-05-27 | The **initial SDK release tag**. It predates `PROTOCOL.md`, `TROUBLESHOOTING.md`, the aligned competing-submission schema, the safety examples and their contract tests, so it does **not** implement the contract described in [PROTOCOL.md](PROTOCOL.md). |
 
