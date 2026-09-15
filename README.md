@@ -76,9 +76,10 @@ IQX's **public research record, protocol specification, and reference SDK**.
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Failure modes in the public reference SDK, and what each one actually means |
 
 > **⚠️ Pre-v1.0 stability.** The published surface is at `v0.1` and may change
-> without notice until `v1.0-stable`. Pin a **commit SHA** for reproducibility.
-> The `v0.1.0` tag is the initial May 2026 SDK release and is **not** the snapshot
-> this documentation describes. See the SDK install section below.
+> without notice until `v1.0-stable`. Pin the **`v0.1.1` release tag** — it is the
+> snapshot this documentation describes. The `v0.1.0` tag is the initial May 2026
+> SDK release and describes an earlier, different contract. See the SDK install
+> section below.
 
 ## 🏗️ Core pillars of the v0.1 protocol
 
@@ -99,15 +100,21 @@ program treats as superseded.
 > track the active experiment, and nothing in this section should be read as a
 > description of it.
 
-> ⚠️ **Heads-up on PyPI**: there is an unrelated package named `iqx` on PyPI that is **not** affiliated with this project. Do **not** `pip install iqx`. The canonical install for the IQX SDK pins a commit SHA: `pip install git+https://github.com/open-iqx/iqx-protocol.git@ef8184cae0e0e266b39c47818bd19efddae2572c`. No PyPI release for this project is planned in v0.x.
+> ⚠️ **Heads-up on PyPI**: there is an unrelated package named `iqx` on PyPI that is **not** affiliated with this project. Do **not** `pip install iqx`. The canonical install for the IQX SDK pins the `v0.1.1` release tag: `pip install git+https://github.com/open-iqx/iqx-protocol.git@v0.1.1`. No PyPI release for this project is planned in v0.x.
 
 The `iqx/` package is the public protocol surface — installable via `pip` directly from this Git repo. No PyPI release in v0.x; distribution is `git+https://…` until external adoption justifies the maintenance overhead.
 
 ```bash
-# Canonical install — the July 2026 protocol-aligned public implementation
-# snapshot, which is the SDK this documentation describes
-pip install git+https://github.com/open-iqx/iqx-protocol.git@ef8184cae0e0e266b39c47818bd19efddae2572c
+# Canonical install — v0.1.1: the July 2026 protocol-aligned public
+# implementation plus the current research-positioning documentation.
+# This is the SDK this documentation describes.
+pip install git+https://github.com/open-iqx/iqx-protocol.git@v0.1.1
 ```
+
+> **Tag status.** `v0.1.1` is created only after the change that introduces it
+> has been reviewed and merged. Until the tag is pushed the command above does
+> not resolve; pin that change's merge commit in the meantime. This note is
+> removed once the tag exists.
 
 The **initial May 2026 SDK release tag** is still installable, and is the right
 choice only if you specifically want that first release:
@@ -122,7 +129,7 @@ pip install git+https://github.com/open-iqx/iqx-protocol.git@v0.1.0
 Sanity-check the install:
 
 ```bash
-python -c "import iqx; print(iqx.__version__)"                        # → 0.1.0
+python -c "import iqx; print(iqx.__version__)"                        # → 0.1.1
 python -c "from iqx import Task, Agent, register_verifier, Verdict"   # top-level vocabulary
 python -c "import iqx.schema, iqx.registry, iqx.pow, iqx.verifier"    # SDK modules
 python -c "import iqx.examples.worker_judge, iqx.examples.boss_smart_money, iqx.examples.baseline_worker, iqx.examples.self_play"
@@ -150,9 +157,9 @@ The installable package surface:
 | `iqx.bench.replay` | Offline replay benchmark — `python3 -m iqx.bench.replay --worker module:fn` scores a Worker against a frozen 8-record dataset and prints accuracy vs. the baseline floor (exit 0 if Worker ≥ baseline). No network. |
 | `iqx.bench.dataset` | Replay dataset loader — JSONL reader + `ReplayRecord` dataclass + `default_dataset_path()` (package-resource resolution for the shipped 8-record dataset) |
 
-The operator-private central-node code (`main.py`, `db.py`, `verifier.py` (the poller), `publisher.py`, `agents/`) is **not** installed — it stays in the operator's own repo and runs alongside the SDK (installed via the canonical pinned-SHA URL above) only on the operator's own node.
+The operator-private central-node code (`main.py`, `db.py`, `verifier.py` (the poller), `publisher.py`, `agents/`) is **not** installed — it stays in the operator's own repo and runs alongside the SDK (installed via the canonical tagged URL above) only on the operator's own node.
 
-> **Versioning policy**: no stability guarantee until `v1.0-stable`. Pin to a commit SHA for reproducibility; `main` may change beneath you.
+> **Versioning policy**: no stability guarantee until `v1.0-stable`. Pin the `v0.1.1` release tag (or its commit SHA); `main` may change beneath you.
 
 ## 🚀 Getting started
 
@@ -317,13 +324,16 @@ are the longer-lived design boundaries and the condition that unblocks each.
 
 ### Versioning policy
 
-Two published points exist, and they are **not** interchangeable:
+Three published points exist, and they are **not** interchangeable:
 
 | Reference | What it is |
 |---|---|
-| `ef8184cae0e0e266b39c47818bd19efddae2572c` | The **July 2026 protocol-aligned public implementation snapshot** — the SDK this documentation describes. Pin this for a reproducible install. |
+| `v0.1.1` | **Canonical.** The **July 2026 protocol-aligned public implementation** plus the **current research-positioning documentation** — the SDK and the documentation set this repository describes. Pin this. It is tagged only after the change introducing it is merged; see the SDK install section above. |
+| `ef8184cae0e0e266b39c47818bd19efddae2572c` | Historical provenance: the July 2026 protocol-aligned implementation **as first published**. Aside from the version declaration in `iqx/__init__.py`, the public SDK implementation and runtime behavior in `v0.1.1` are unchanged from this commit. It predates the research-positioning documentation and reports `0.1.0`, and it is no longer the install to pin. |
 | `v0.1.0`, tagged 2026-05-27 | The **initial SDK release tag**. It predates `PROTOCOL.md`, `TROUBLESHOOTING.md`, the aligned competing-submission schema, the safety examples and their contract tests, so it does **not** implement the contract described in [PROTOCOL.md](PROTOCOL.md). |
 
-Both points report `iqx.__version__ == "0.1.0"`, so the version string does not distinguish them — the commit SHA does.
+`v0.1.0` and `ef8184cae0e0e266b39c47818bd19efddae2572c` both report
+`iqx.__version__ == "0.1.0"`, so the version string does not distinguish them —
+the commit SHA does. `v0.1.1` reports `0.1.1`.
 
-There is no stability guarantee until `v1.0-stable`. Pin a commit SHA rather than tracking `main`, which may change beneath you. No PyPI release in v0.x; PyPI is reconsidered once a third-party agent actually depends on stable semver.
+There is no stability guarantee until `v1.0-stable`. Pin `v0.1.1` rather than tracking `main`, which may change beneath you. No PyPI release in v0.x; PyPI is reconsidered once a third-party agent actually depends on stable semver.

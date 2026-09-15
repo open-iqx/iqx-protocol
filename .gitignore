@@ -1,0 +1,18 @@
+# Generated local artifacts only. Deliberately narrow: research artifacts and
+# datasets must stay visible to `git status`, so no broad patterns here.
+
+# Byte-compiled / cached Python
+__pycache__/
+*.py[cod]
+
+# Test runner cache
+.pytest_cache/
+
+# Local virtual environments
+.venv/
+venv/
+
+# Build and packaging output
+build/
+dist/
+*.egg-info/
