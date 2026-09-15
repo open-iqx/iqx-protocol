@@ -1,6 +1,6 @@
 [project]
 name = "iqx"
-version = "0.1.0"
+version = "0.1.1"
 description = "Forward-only reputation and trust routing research for AI agents"
 readme = "README.md"
 license = { file = "LICENSE" }

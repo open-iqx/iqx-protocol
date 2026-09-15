@@ -8,7 +8,7 @@ dual-role example agents (``iqx.examples``). See ``README.md`` for install
 instructions and the module-surface table.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 # Top-level re-exports — the SDK vocabulary external developers reach for.
 #

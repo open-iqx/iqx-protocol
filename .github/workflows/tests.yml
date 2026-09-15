@@ -1,0 +1,47 @@
+# Public SDK CI — runs the test suite that ships with this repository.
+#
+# Scope is deliberately minimal: install the package with its declared dev
+# extras and run the existing suite. No coverage service, no linting, no
+# packaging or release step, no caching. The bar is "the published bundle
+# installs clean and its own tests pass".
+#
+# The matrix is the two interpreters the project actually commits to:
+#   - 3.9  — the declared minimum in pyproject (`requires-python = ">=3.9"`),
+#            so a change that quietly drops it fails here rather than on an
+#            external developer's machine.
+#   - 3.12 — the interpreter the SDK is developed against.
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      # Report both interpreters on every run: a failure specific to the
+      # declared minimum is the thing this matrix exists to surface, and
+      # cancelling the other job would hide whether it is version-specific.
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package and dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run the test suite
+        run: python -m pytest

@@ -148,10 +148,10 @@ it is a parent-task status and never appears on a submission row.
 when you construct the enum from it — `settled` did not exist in earlier
 published versions.
 
-**Fix.** Reinstall from the commit this documentation describes — see
-[README.md](README.md) for the pinned install. Pin a specific SHA rather than
-tracking `main`, and re-pin deliberately. The `v0.1.0` tag is the initial May 2026
-release and predates `settled`.
+**Fix.** Reinstall from the release this documentation describes — `v0.1.1`; see
+[README.md](README.md) for the canonical install command and for when that tag is
+created. Pin that release rather than tracking `main`, and re-pin deliberately.
+The `v0.1.0` tag is the initial May 2026 release and predates `settled`.
 
 ## Field mismatches against the live API
 
