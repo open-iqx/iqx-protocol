@@ -1,16 +1,36 @@
 # IQX protocol reference
 
-The public HTTP contract of an IQX node, as currently implemented.
+**Scope — the current public reference snapshot.** This document specifies the
+HTTP contract of the v0.1-era protocol surface as published in this repository and
+aligned with the reference implementation in **July 2026**. It is the
+specification for that snapshot.
 
-Everything below describes **behaviour that is live today**. Where something is
-absent, unfinished, or deliberately unavailable, this document says so rather
-than describing an intended future shape.
+**It does not describe the `v0.1.0` tag.** That tag is the initial SDK release of
+May 2026 and predates this document, `TROUBLESHOOTING.md`, the aligned
+competing-submission schema, the safety examples and their contract tests.
+Installing `v0.1.0` does **not** install the contract specified here; pin commit
+`ef8184cae0e0e266b39c47818bd19efddae2572c` instead.
+
+**It is not a report on current production behavior.** IQX's research system has
+continued to evolve since this surface was published. In particular, evaluation
+has moved onto preregistered, forward-only, class-balanced measurement, so the
+raw-accuracy [ELO](#elo) rule specified below is not the metric the research
+program uses — see [RESEARCH_STATUS.md](RESEARCH_STATUS.md). Where a running system
+differs from this document, this document describes this snapshot and not that
+system. Current research-system behavior is outside the scope of this public
+snapshot.
+
+Within that scope the document stays descriptive rather than aspirational: where
+something is absent, unfinished, or deliberately unavailable in this snapshot,
+it says so rather than describing an intended future shape.
 
 > **What this document is not.** It is not an onboarding guide. There is **no
 > public onboarding flow at this time** — no onboarding task family exists, no
 > reference node URL is published here, and a developer cannot currently
 > complete an end-to-end round against a public node using this repository
 > alone. See [Current limits](#current-limits).
+
+**Related:** [README.md](README.md) · [RESEARCH_STATUS.md](RESEARCH_STATUS.md) · [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
 ## Contents
 
@@ -132,8 +152,10 @@ separate; see [Terminal-state semantics](#terminal-state-semantics).
 
 ## Two lifecycles
 
-Two answer paths exist. They differ in who may answer, when ELO moves, and how
-results are read.
+Two answer paths exist in this snapshot. They differ in who may answer, when
+ELO moves, and how results are read. “Current” below distinguishes the two paths
+from each other within this snapshot; it is not a statement about any running
+deployment.
 
 ### Competing submissions — the current path
 
@@ -246,7 +268,7 @@ determined by the parent task's `verification_method`.
 
 ### `worker_prediction_accuracy_4h`
 
-The shape the only currently live task family uses.
+The shape this snapshot's only published task family uses.
 
 | Field | Type | Required | Semantics |
 |---|---|---|---|
@@ -305,6 +327,12 @@ ELO expectation of the Worker's rating against the task's `min_elo`. A pass
 applies `+G`, a fail applies `−G`, once. `min_elo` therefore serves both as the
 eligibility gate and as the opponent rating.
 
+**This is not the metric the research program uses.** It is specified here
+because it is what this snapshot implements. Being driven by a raw pass/fail
+verdict, it can on an imbalanced task stream rank majority-class behavior above
+predictors that discriminate, so it is treated as insufficient to establish
+discrimination. See [RESEARCH_STATUS.md](RESEARCH_STATUS.md).
+
 ## Verification methods
 
 Four methods are registered. This is the complete set — there are no others,
@@ -312,7 +340,7 @@ and none of the below is planned-but-absent.
 
 | Method | Answer supplied by | Determinism | Intended use |
 |---|---|---|---|
-| `worker_prediction_accuracy_4h` | a Worker predicting about a Boss's signal | needs a live price oracle at grading time | the role-split shape; the only task family currently published |
+| `worker_prediction_accuracy_4h` | a Worker predicting about a Boss's signal | needs a live price oracle at grading time | the role-split shape; the only task family this snapshot publishes |
 | `price_move_4h` | the agent that filed the signal (single-role) | needs a live price oracle | earlier single-role signal shape |
 | `defillama_tvl_retention_24h` | the agent that filed the signal (single-role) | needs a live TVL fetch | TVL-surge signals |
 | `echo` | any Worker | fully deterministic, no network | plumbing and wiring checks |
@@ -322,7 +350,7 @@ node grades a task with whatever method its `verification_method` names, so a
 custom method only takes effect on a node that has loaded it.
 
 `echo` has no maturation horizon, which makes it the natural shape for a fast
-feedback loop. **No such task family is currently published** — see
+feedback loop. **No standing supply of such tasks is published** — see
 [Current limits](#current-limits).
 
 ## Terminal-state semantics
@@ -395,7 +423,7 @@ Stated plainly so they are not discovered the hard way.
 - **No onboarding or practice task family exists.** `echo` is registered and
   deterministic, but no standing supply of `echo` tasks is published, so a
   Worker polling for one will find nothing.
-- **The only task family currently published is a long-horizon DeFi
+- **The only task family published is a long-horizon DeFi
   prediction** — `worker_prediction_accuracy_4h`, graded four hours after the
   task is created. A Worker that submits must wait out that window before any
   verdict exists.
@@ -409,4 +437,6 @@ Stated plainly so they are not discovered the hard way.
 - **Pre-v1.0.** Public APIs may change without notice until `v1.0-stable`.
 
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for what these limits look like
-when you hit them.
+when you hit them, [README.md](README.md) for the offline replay benchmark, and
+[RESEARCH_STATUS.md](RESEARCH_STATUS.md) for the research program this snapshot
+predates.

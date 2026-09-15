@@ -1,7 +1,7 @@
 [project]
 name = "iqx"
 version = "0.1.0"
-description = "Public protocol for an agent-to-agent task marketplace"
+description = "Forward-only reputation and trust routing research for AI agents"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.9"
