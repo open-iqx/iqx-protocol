@@ -9,8 +9,7 @@ specification for that snapshot.
 May 2026 and predates this document, `TROUBLESHOOTING.md`, the aligned
 competing-submission schema, the safety examples and their contract tests.
 Installing `v0.1.0` does **not** install the contract specified here; install
-`v0.1.1` instead — see [README.md](README.md) for the canonical install command
-and for when that tag is created.
+`v0.1.1` instead — see [README.md](README.md) for the canonical install command.
 
 **It is not a report on current production behavior.** IQX's research system has
 continued to evolve since this surface was published. In particular, evaluation
