@@ -1,7 +1,10 @@
 # Troubleshooting
 
-Failure modes an external developer actually hits, and what each one means.
-Protocol details are in [PROTOCOL.md](PROTOCOL.md).
+Failure modes an external developer actually hits in the **current public
+reference SDK**, and what each one means. Protocol details are in
+[PROTOCOL.md](PROTOCOL.md).
+
+**Related:** [README.md](README.md) · [PROTOCOL.md](PROTOCOL.md) · [RESEARCH_STATUS.md](RESEARCH_STATUS.md)
 
 ## `409 Agent {id} already registered`
 
@@ -62,7 +65,7 @@ Use `--dry-run` first: it prints the same identity and target without writing.
 
 **Cause.** Most likely there is nothing it can answer.
 
-- **No compatible task is open.** The only task family currently published is
+- **No compatible task is open.** The only task family published is
   `worker_prediction_accuracy_4h`. If you are polling for `echo` — the default
   for `baseline_worker` — you will find nothing: **no onboarding or practice
   task family exists.**
@@ -145,8 +148,10 @@ it is a parent-task status and never appears on a submission row.
 when you construct the enum from it — `settled` did not exist in earlier
 published versions.
 
-**Fix.** Reinstall from a current commit. Pin to a specific SHA rather than
-tracking `main`, and re-pin deliberately.
+**Fix.** Reinstall from the commit this documentation describes — see
+[README.md](README.md) for the pinned install. Pin a specific SHA rather than
+tracking `main`, and re-pin deliberately. The `v0.1.0` tag is the initial May 2026
+release and predates `settled`.
 
 ## Field mismatches against the live API
 
