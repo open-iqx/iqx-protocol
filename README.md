@@ -2,6 +2,11 @@
 
 **IQX studies forward-only reputation and trust routing for AI agents.**
 
+**White paper:** [*IQX: Forward-Only Reputation and Trust Routing for AI
+Agents*](papers/iqx-whitepaper-v0.1.pdf), v0.1, 22 September 2026 — a technical
+report, not peer reviewed. Its summary, citation and license are in
+[papers/](papers/README.md).
+
 An agent commits a falsifiable, time-bounded answer before the outcome that
 settles it exists. A verifier grades that answer later, against an outcome the
 agent could not have observed when it answered. In the research design, only
@@ -50,10 +55,14 @@ frozen before any eligible outcome from the evaluated run is observed.
 
 **What is not claimed.** No market-alpha claim, no wallet-signal claim, no agent
 capability claim, and no trust-routing claim has been established here. The
-paired experiment is still running: the frozen conditions required to authorize
-its scientific claims have not all been satisfied, and no final readout has been
-archived. [RESEARCH_STATUS.md](RESEARCH_STATUS.md) states the method and the
-claims that are explicitly not being made.
+V3.3 evidence reported in the [white paper](papers/README.md) ends at a frozen
+cut, closed by an administrative decision and not by the preregistered stopping
+rule, which would have continued. Under the preregistered rules, its readout
+concludes that learnability is **not established**, with no capability tier
+claimed, and that the wallet increment is **inconclusive**. Predictive
+reputation and routing value remain unvalidated. Predictions made after the cut
+fall outside it and do not change it. [RESEARCH_STATUS.md](RESEARCH_STATUS.md)
+states the method and the claims that are explicitly not being made.
 
 ## 🧭 What this repository is
 
@@ -72,6 +81,7 @@ IQX's **public research record, protocol specification, and reference SDK**.
 | Document | Contents |
 |---|---|
 | [RESEARCH_STATUS.md](RESEARCH_STATUS.md) | The active research questions, the forward-only and preregistered method, and the claims not being made |
+| [papers/](papers/README.md) | White Paper v0.1 (PDF): the protocol, the V3.3 evidence cut and its limits. Licensed separately, under CC BY 4.0 |
 | [PROTOCOL.md](PROTOCOL.md) | The v0.1 protocol surface — statuses, both lifecycles, endpoints, the Worker answer schema, verification methods, terminal-state semantics, credentials |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Failure modes in the public reference SDK, and what each one actually means |
 
@@ -332,3 +342,12 @@ Three published points exist, and they are **not** interchangeable:
 the commit SHA does. `v0.1.1` reports `0.1.1`.
 
 There is no stability guarantee until `v1.0-stable`. Pin `v0.1.1` rather than tracking `main`, which may change beneath you. No PyPI release in v0.x; PyPI is reconsidered once a third-party agent actually depends on stable semver.
+
+## ⚖️ License
+
+The software in this repository, including the `iqx` package, is licensed under
+the Apache License 2.0; see [LICENSE](LICENSE). That license is unchanged.
+
+The white paper in [papers/](papers/README.md) is licensed separately, under the
+Creative Commons Attribution 4.0 International License (CC BY 4.0); see
+[papers/LICENSE](papers/LICENSE).
