@@ -3,13 +3,14 @@
 What IQX is currently studying, how it is being measured, and which claims are
 explicitly **not** being made.
 
-**Related:** [README.md](README.md) · [PROTOCOL.md](PROTOCOL.md) · [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+**Related:** [README.md](README.md) · [White Paper v0.1](papers/README.md) · [PROTOCOL.md](PROTOCOL.md) · [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
-This document is written to stay accurate while the experiment runs. It carries
+This document is written to stay accurate as the research continues. It carries
 no sample counts, point estimates, intervals, test statistics, or completion
 dates: those belong in a frozen readout published after the fact, not in a
-document that would silently go stale. Nor does it describe deployment,
-scheduling, or operational state.
+document that would silently go stale. The frozen readout of the V3.3 evidence
+cut is published in [White Paper v0.1](papers/README.md). Nor does this
+document describe deployment, scheduling, or operational state.
 
 ## 1. The subject
 
@@ -116,11 +117,12 @@ the arithmetic on published data: its dataset has a balanced outcome split and
 the shipped reference Worker answers identically on every record, so its 50%
 accuracy carries **J = 0**.
 
-## 3. The active experiment
+## 3. The paired experiment
 
-**V3.3 is an active paired experiment.** It runs in a delayed-outcome market
-domain, which is used because outcomes are externally observable, timestamped,
-and inexpensive to verify — not because market prediction is the point.
+**V3.3 is the paired experiment whose evidence cut White Paper v0.1 reports.**
+Its domain is a delayed-outcome market, which is used because outcomes are
+externally observable, timestamped, and inexpensive to verify — not because
+market prediction is the point.
 
 Two predictors receive the same task and share the same recorded,
 content-addressed market capture:
@@ -146,22 +148,31 @@ wallet term may prove harmful in the form tested, or neither arm may discriminat
 at all. A null wallet effect would be a result about the wallet term as tested,
 not about forward evaluation.
 
-**Status.** The paired experiment is still running. The frozen conditions
-required to authorize its scientific claims have not all been satisfied, and no
-final readout has been archived.
+**Status.** The evidence for White Paper v0.1 ends at a frozen cut after three
+epochs. The cut was closed by an administrative decision, not by the
+preregistered stopping rule, which would have continued; the paper states the
+truncation and its consequences. The cut's readout is frozen and archived, and
+under the preregistered rules it concludes:
 
-Those conditions were fixed before any eligible outcome from this run was
-observed. They gate claims on realized support rather than on elapsed time or
+- **Q1:** learnability is **not established**, and no capability tier is claimed.
+- **Q2:** the wallet increment is **inconclusive** — not demonstrated, which is
+  not evidence of absence.
+
+Predictions made after the cut fall outside it. They are not pooled into it and
+do not change its conclusions.
+
+The conditions that authorize the experiment's scientific claims were fixed
+before any eligible outcome from this run was observed. They gate claims on realized support rather than on elapsed time or
 answer volume — minimum realized minority-class outcomes per arm before an
 estimate may be quoted, a higher minimum before an interval claim, a minimum
 settled-answer count before a predictor may be ranked at all, and stability
 across disjoint settled epochs.
 A separate degeneracy condition voids the wallet contrast in either direction
 when the two arms rarely disagree, or when the answers concentrate in too few
-sources for the contrast to mean anything. Which individual conditions are
-presently satisfied is not reported here; that is what a frozen readout reports.
+sources for the contrast to mean anything. Which individual conditions the cut
+satisfied is not restated here; the paper reports them.
 
-Until a readout is frozen and archived, interim observations are not findings.
+Outside a frozen readout, interim observations are not findings.
 They are not published here, and a favorable-looking interim number is not
 evidence of skill.
 
@@ -171,7 +182,7 @@ Three claims, progressively stronger, that must not be conflated:
 
 | Claim | Question | Status |
 |---|---|---|
-| **Skill** | Does a predictor discriminate better than a constant baseline on forward tasks in this family? | Under study |
+| **Skill** | Does a predictor discriminate better than a constant baseline on forward tasks in this family? | Under study; not established at the V3.3 cut |
 | **Predictive reputation** | Does an estimate frozen on earlier tasks predict performance on later, unseen tasks in the same family? | Not established |
 | **Routing value** | Does choosing an agent or reviewer by that reputation improve correctness, severe-failure rate, cost, or latency against a declared routing baseline? | Not established |
 
@@ -204,8 +215,9 @@ Stated explicitly, because absence of a disclaimer reads as a claim:
   estimate predicts later unseen performance.
 - **No trust-routing claim.** IQX has not demonstrated successful trust routing,
   and no routing experiment has been run.
-- **No final claim authorized.** No frozen, archived readout has established any
-  of the scientific claims above.
+- **No final claim authorized.** The frozen, archived readout of the V3.3 cut
+  establishes none of the scientific claims above, and its administrative
+  closure is not the preregistered stopping event.
 - **No attestation claim.** The system operates under a trusted-operator and
   trusted-host assumption. Content hashes, artifact manifests, clean checkouts,
   and authority records give provenance and detect classes of accidental drift.
@@ -230,13 +242,16 @@ protocol. It falsifies one predictor–task–verifier combination.
 
 The [current public reference snapshot](README.md) — the v0.1-era protocol
 specification, the reference SDK, and a small offline replay benchmark — plus
-this statement of method and status.
+this statement of method and status, and [White Paper v0.1](papers/README.md),
+which is licensed separately, under CC BY 4.0.
 
-It does not publish the research system's code, configuration, deployment,
+Beyond what the white paper reports about the experiment's design and results,
+it does not publish the research system's code, configuration, deployment,
 schedules, data sources, wallet identifiers, datasets, or runtime artifacts. The
 offline replay benchmark shipped here demonstrates mechanics and reproducibility
 on a small retrospective dataset; it is not evidence of predictive skill, it is
 not a production measurement, and it is unrelated to the paired experiment above.
 
-A frozen readout is published only once the preregistered rules permit it. A null
+The V3.3 readout is published at an administrative cut, with the truncation
+stated; it does not claim that the preregistered stopping rule was met. A null
 or negative result remains publishable, and would be reported as a result.
