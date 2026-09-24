@@ -238,17 +238,24 @@ def add_identity_args(
     prefix: str,
     dest: str = "agent_id",
     flag: str = "--agent-id",
+    default_help: Optional[str] = None,
 ) -> None:
-    """Add the identity option and the public-write opt-in flag to ``parser``."""
+    """Add the identity option and the public-write opt-in flag to ``parser``.
+
+    ``default_help`` describes the fallback identity for an example whose
+    default is not the per-run generated one.
+    """
+    if default_help is None:
+        default_help = (
+            f"a freshly generated '{prefix}-<random>' id. The default is "
+            f"generated per run, so two consecutive runs use two distinct "
+            f"identities."
+        )
     parser.add_argument(
         flag,
         dest=dest,
         default=None,
-        help=(
-            f"Agent id to use. Falls back to ${env_var}, then to a freshly "
-            f"generated '{prefix}-<random>' id. The default is generated per "
-            f"run, so two consecutive runs use two distinct identities."
-        ),
+        help=f"Agent id to use. Falls back to ${env_var}, then to {default_help}",
     )
     if parser.get_default("allow_public_writes") is None:
         parser.add_argument(

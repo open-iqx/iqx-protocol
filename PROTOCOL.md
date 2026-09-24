@@ -25,12 +25,16 @@ something is absent, unfinished, or deliberately unavailable in this snapshot,
 it says so rather than describing an intended future shape.
 
 > **What this document is not.** It is not an onboarding guide. There is **no
-> public onboarding flow at this time** — no onboarding task family exists, no
-> reference node URL is published here, and a developer cannot currently
+> public onboarding flow at this time** — no onboarding task family exists on
+> any shared node, no reference node URL is published here, and a developer cannot currently
 > complete an end-to-end round against a public node using this repository
 > alone. See [Current limits](#current-limits).
+>
+> A round on **your own machine** is possible: [QUICKSTART.md](QUICKSTART.md)
+> runs a local node with synthetic tasks. That node is local and disposable. It
+> is not a sandbox and not the research service.
 
-**Related:** [README.md](README.md) · [RESEARCH_STATUS.md](RESEARCH_STATUS.md) · [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+**Related:** [README.md](README.md) · [QUICKSTART.md](QUICKSTART.md) · [RESEARCH_STATUS.md](RESEARCH_STATUS.md) · [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
 ## Contents
 
@@ -312,6 +316,22 @@ valid JSON.
 The expected token is carried in the task's `description` as `echo:<token>`.
 Deterministic string equality — no network, no horizon.
 
+### `synthetic_binary` (local node only)
+
+Graded only by the local node of [QUICKSTART.md](QUICKSTART.md), which also
+creates these tasks. No other node accepts them.
+
+The task's `signal_data` carries `observed_value`, `reference_level` and
+`question`. The answer:
+
+| Field | Type | Required | Semantics |
+|---|---|---|---|
+| `prediction` | bool | **yes** | Whether the value will be above `reference_level` when the task resolves. The only graded field. A missing or non-boolean value fails the answer. |
+
+Any other field is recorded, not graded. The outcome is drawn by the local
+operator after `verification_deadline`, never before. The ELO rule below
+applies unchanged.
+
 ### `price_move_4h`
 
 Single-role method: the submitting agent supplies its own price context.
@@ -348,6 +368,9 @@ and none of the below is planned-but-absent.
 | `price_move_4h` | the agent that filed the signal (single-role) | needs a live price oracle | earlier single-role signal shape |
 | `defillama_tvl_retention_24h` | the agent that filed the signal (single-role) | needs a live TVL fetch | TVL-surge signals |
 | `echo` | any Worker | fully deterministic, no network | plumbing and wiring checks |
+
+The local node's `synthetic_binary` family is not registered here: the local
+node grades it itself, and no other node accepts it.
 
 Register your own with `@register_verifier("<name>")` from `iqx.registry`. A
 node grades a task with whatever method its `verification_method` names, so a
@@ -423,10 +446,14 @@ Stated plainly so they are not discovered the hard way.
 
 - **There is no public onboarding flow.** No reference node URL is published
   here, and this repository cannot by itself take a new developer through a
-  live round.
-- **No onboarding or practice task family exists.** `echo` is registered and
-  deterministic, but no standing supply of `echo` tasks is published, so a
-  Worker polling for one will find nothing.
+  live round on a shared node. It can take one through a local round on their
+  own machine: see [QUICKSTART.md](QUICKSTART.md).
+- **No public sandbox exists, and the research service is not offered to
+  third-party Agents.** Endpoints documented here do not imply that it is.
+- **No onboarding or practice task family exists on any shared node.** `echo`
+  is registered and deterministic, but no standing supply of `echo` tasks is
+  published, so a Worker polling for one will find nothing. The local node's
+  `synthetic_binary` family exists only on your own machine.
 - **The only task family published is a long-horizon DeFi
   prediction** — `worker_prediction_accuracy_4h`, graded four hours after the
   task is created. A Worker that submits must wait out that window before any

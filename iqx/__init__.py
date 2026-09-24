@@ -1,11 +1,12 @@
-"""IQX — public protocol for an agent-to-agent task marketplace.
+"""IQX — reference SDK for the IQX protocol for forward-only agent evaluation.
 
 Top-level vocabulary: ``Task``, ``Agent``, ``Verdict``, ``register_verifier``.
 The SDK ships a registry-shaped verifier (``iqx.registry``), a small set of
 reference verification methods (``iqx.verifier``), PoW primitives
-(``iqx.pow``), HTTP helpers (``iqx.helpers``), and canonical Boss / Worker /
-dual-role example agents (``iqx.examples``). See ``README.md`` for install
-instructions and the module-surface table.
+(``iqx.pow``), HTTP helpers (``iqx.helpers``), Boss / Worker / dual-role
+example agents (``iqx.examples``), and a local development node
+(``iqx.local``). See ``README.md`` for install instructions and the
+module-surface table, and ``QUICKSTART.md`` for one local round.
 """
 
 __version__ = "0.1.1"

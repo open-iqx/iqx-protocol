@@ -76,12 +76,18 @@ IQX's **public research record, protocol specification, and reference SDK**.
   are the **current public reference snapshot**: a working, self-contained
   artifact documenting the v0.1-era protocol surface.
 - There is **no public onboarding flow**. No reference node URL is published
-  here, no onboarding or practice task family exists, and this repository cannot
-  by itself take a new developer through a live end-to-end round. The offline
-  replay benchmark below needs no node and works fully.
+  here, no onboarding or practice task family exists on any shared node, and
+  this repository cannot by itself take a new developer through a live
+  end-to-end round on a shared node. The offline replay benchmark below needs no
+  node and works fully.
+- A **local round on your own machine** is possible:
+  [QUICKSTART.md](QUICKSTART.md) starts a local node with synthetic tasks,
+  registers an Agent, answers before the deadline, resolves after it, and prints
+  the Agent's record.
 
 | Document | Contents |
 |---|---|
+| [QUICKSTART.md](QUICKSTART.md) | One local round on your own machine: a local node, synthetic tasks, one Agent, its record |
 | [RESEARCH_STATUS.md](RESEARCH_STATUS.md) | The active research questions, the forward-only and preregistered method, and the claims not being made |
 | [papers/](papers/README.md) | White Paper v0.1 (PDF): the protocol, the V3.3 evidence cut and its limits. Licensed separately, under CC BY 4.0 |
 | [PROTOCOL.md](PROTOCOL.md) | The v0.1 protocol surface — statuses, both lifecycles, endpoints, the Worker answer schema, verification methods, terminal-state semantics, credentials |
@@ -156,7 +162,9 @@ The installable package surface:
 | `iqx.helpers.price` | CoinGecko price helpers + per-chain WETH addresses |
 | `iqx.helpers.defillama` | DefiLlama protocol fetch helper |
 | `iqx.helpers.state` | `resolve_state_dir()` — canonical state-directory resolution for credentials and caches across source-tree and pip-installed deployments |
+| `iqx.local` | Local development node — `python -m iqx.local serve / publish / resolve`. Loopback only, synthetic tasks only; needs the `local` extra. On `main`, not in `v0.1.1`. See [QUICKSTART.md](QUICKSTART.md) |
 | `iqx.examples.identity` | Agent-id resolution (CLI / env / generated) and the write safeguards every write-capable example goes through |
+| `iqx.examples.quickstart_worker` | Minimal Worker on the competing-submissions path, with a version-bound identity and a `--report` of its graded record. Answers only the local node's synthetic tasks. On `main`, not in `v0.1.1` |
 | `iqx.examples.boss_smart_money` | Boss-only smart-money cluster monitor (operator-oriented) |
 | `iqx.examples.worker_judge` | Independent Judge Worker (`worker_prediction_accuracy_4h`) |
 | `iqx.examples.baseline_worker` | Reference Worker — defaults to claiming `echo` only; `worker_prediction_accuracy_4h` requires explicit `--methods` opt-in (the legacy claim path is single-claim, so the baseline must not take live prediction tasks from smarter Workers) |
@@ -164,20 +172,31 @@ The installable package surface:
 | `iqx.bench.replay` | Offline replay benchmark — `python3 -m iqx.bench.replay --worker module:fn` scores a Worker against a frozen 8-record dataset and prints accuracy vs. the baseline floor (exit 0 if Worker ≥ baseline). No network. |
 | `iqx.bench.dataset` | Replay dataset loader — JSONL reader + `ReplayRecord` dataclass + `default_dataset_path()` (package-resource resolution for the shipped 8-record dataset) |
 
-The operator-private central-node code (`main.py`, `db.py`, `verifier.py` (the poller), `publisher.py`, `agents/`) is **not** installed — it stays in the operator's own repo and runs alongside the SDK (installed via the canonical tagged URL above) only on the operator's own node.
+The operator-private central-node code (`main.py`, `db.py`, `verifier.py` (the poller), `publisher.py`, `agents/`) is **not** installed — it stays in the operator's own repo and runs alongside the SDK (installed via the canonical tagged URL above) only on the operator's own node. `iqx.local` is not that code: it is a small local node written for developing an Agent, and it serves only the Agent-facing endpoints.
 
 > **Versioning policy**: no stability guarantee until `v1.0-stable`. Pin the `v0.1.1` release tag (or its commit SHA); `main` may change beneath you.
 
 ## 🚀 Getting started
 
 > Everything in this section belongs to the **current public reference snapshot**.
-> External contributors run agents against a node they operate or have been given
-> access to; **this repository publishes no reference node URL.** The published
+> **This repository publishes no reference node URL.** The published
 > specification, not any particular deployment, is what this repository keeps.
+
+### Where an Agent can run
+
+- **A local node on your own machine** — available. [QUICKSTART.md](QUICKSTART.md)
+  runs one complete round with synthetic tasks. It is local and disposable, and
+  it says nothing about predictive skill.
+- **A public sandbox** — none exists.
+- **The operator's research service** — not offered to third-party Agents. No
+  address is published and no task family is offered to external Agents. Do not
+  point a client at it. The endpoints in [PROTOCOL.md](PROTOCOL.md) describe how
+  an Agent talks to a node; they do not mean third-party participation is
+  offered.
 
 ### Start offline — the replay benchmark
 
-The replay benchmark ships a frozen 8-record dataset and grades any conforming Worker against the reference baseline accuracy floor. It is **fully offline** — no node, no CoinGecko, no network — and it is the part of this repository that runs end-to-end today.
+The replay benchmark ships a frozen 8-record dataset and grades any conforming Worker against the reference baseline accuracy floor. It is **fully offline** — no node, no CoinGecko, no network. The other part of this repository that runs end-to-end without a shared node is the local round in [QUICKSTART.md](QUICKSTART.md).
 
 ```bash
 # 1. Score the shipped baseline first (sanity check that the bench runs)
@@ -218,24 +237,28 @@ Read [PROTOCOL.md](PROTOCOL.md) first. The short version:
 - Read your own result from `GET /tasks/{task_id}/submissions` and match on your `worker_id`. Terminal per-submission values are `verified` and `failed`. The parent task's `settled` status is a **different** event and may come much later.
 - The answer schema is per verification method — see [PROTOCOL.md § Worker answer contract](PROTOCOL.md#worker-answer-contract).
 
-**Before you copy an example:** the modules in `iqx/examples/` are **legacy v0.1
-SDK examples; not the current research integration path.** Every one of them uses
-the older single-claim path (`/claim` → `/submit`), where one Worker locks a task
-and ELO moves before grading. They are kept that way for compatibility, they each
-say so in their module docstring and `--help`, and they are **not** the shape to
-build a new Worker on.
+**Before you copy an example:** start from `iqx.examples.quickstart_worker`. It
+answers through `POST /tasks/{task_id}/submissions` and reads its verdicts back
+from `GET /tasks/{task_id}/submissions`; [QUICKSTART.md](QUICKSTART.md) runs it.
+The other modules in `iqx/examples/` are **legacy v0.1 SDK examples; not the
+current research integration path.** Each of them uses the older single-claim path
+(`/claim` → `/submit`), where one Worker locks a task and ELO moves before
+grading. They are kept that way for compatibility, they each say so in their
+module docstring and `--help`, and they are **not** the shape to build a new
+Worker on.
 
-The published surface defines one task family — a 4-hour DeFi prediction — and no practice family, so a Worker that submits waits out that window before any verdict exists.
+On a shared node, the published surface defines one task family — a 4-hour DeFi prediction — and no practice family, so a Worker that submits waits out that window before any verdict exists. The local node's synthetic family ([QUICKSTART.md](QUICKSTART.md)) can be resolved a minute after it is published.
 
 ### Example side-effect classification
 
-All of these are legacy v0.1 SDK examples, not the current research integration
-path. Every example is exactly one of four classes, and each states its class in
-its module docstring and in `--help`.
+Apart from `quickstart_worker`, these are legacy v0.1 SDK examples, not the
+current research integration path. Every example is exactly one of four classes,
+and each states its class in its module docstring and in `--help`.
 
 | Command | Side-effect class | Notes |
 |---|---|---|
 | `python3 -m iqx.bench.replay` | **offline / read-only** | Frozen dataset, no network. |
+| `python3 -m iqx.examples.quickstart_worker --dry-run` | **Worker registration / submission** | Competing-submissions Worker for the local node's synthetic tasks. `--dry-run` and `--report` write nothing. See [QUICKSTART.md](QUICKSTART.md). |
 | `python3 -m iqx.examples.baseline_worker --dry-run` | **Worker registration / submission** | Reference Worker; claims `echo` only by default. `--dry-run` previews without registering or writing. |
 | `python3 -m iqx.examples.worker_judge --dry-run` | **Worker registration / submission** | Judge Worker for smart-money tasks. `--dry-run` prints verdicts without writing. |
 | `python3 -m iqx.examples.boss_smart_money --dry-run` | **Boss / task publishing** | Operator-oriented. Detects without publishing. Requires `ETHERSCAN_API_KEY` ([free tier](https://etherscan.io/myapikey)). |
@@ -270,6 +293,12 @@ python3 -m iqx.examples.baseline_worker --agent-id my-worker-1 --dry-run
 | `worker_judge` | `IQX_JUDGE_WORKER_ID` |
 | `boss_smart_money` | `IQX_BOSS_AGENT_ID` |
 | `self_play` | `IQX_SELFPLAY_PUBLISHER_ID`, `IQX_SELFPLAY_WORKER_ID` |
+| `quickstart_worker` | `IQX_QUICKSTART_WORKER_ID` |
+
+`quickstart_worker` is the exception to the per-run default: its default id
+embeds a digest of its own source file plus a random suffix kept in the state
+directory, so the same file keeps one identity across runs and an edited file
+gets a new one.
 
 The credential is cached under the state directory in a file derived from the resolved id, so pinning an id keeps its key across runs and a generated id mints a new one. A filename-safe id is used verbatim (`<agent-id>.key`); any other id gets a sanitized prefix plus a digest of the full id, so no two ids share a credential file. See [PROTOCOL.md § Identity and credentials](PROTOCOL.md#identity-and-credentials).
 
@@ -317,7 +346,7 @@ not scheduled work.
 ### v0.1 known limitations
 
 The full list — including the absence of a public onboarding flow and of any
-practice task family — is in
+practice task family on a shared node — is in
 [PROTOCOL.md § Current limits](PROTOCOL.md#current-limits). The entries below
 are the longer-lived design boundaries and the condition that unblocks each.
 
