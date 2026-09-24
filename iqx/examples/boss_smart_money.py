@@ -127,6 +127,7 @@ from iqx.examples.identity import (
     resolve_agent_id,
     resolve_base_url,
     side_effect_epilog,
+    write_key_file,
 )
 
 # ---- agent identity ----------------------------------------------------------
@@ -491,7 +492,7 @@ def _register() -> str:
         )
     resp.raise_for_status()
     api_key = resp.json()["api_key"]
-    key_path.write_text(api_key)
+    write_key_file(key_path, api_key)
     print(f"[registry] registered {AGENT_ID}; api_key saved to {key_path}", flush=True)
     return api_key
 
