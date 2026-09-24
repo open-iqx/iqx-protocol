@@ -57,6 +57,7 @@ from iqx.examples.identity import (
     resolve_agent_id,
     resolve_base_url,
     side_effect_epilog,
+    write_key_file,
 )
 from iqx.helpers.state import resolve_state_dir
 
@@ -150,13 +151,6 @@ class NodeError(RuntimeError):
     """A node response this example cannot continue from."""
 
 
-def _write_key(path: Path, api_key: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as fh:
-        fh.write(api_key)
-
-
 def ensure_registered(base_url: str, worker_id: str) -> str:
     """Return a key that authenticates as ``worker_id``, registering if needed."""
     key_path = key_path_for(worker_id)
@@ -186,7 +180,7 @@ def ensure_registered(base_url: str, worker_id: str) -> str:
             f"is at {key_path}. Use another id with --agent-id.")
     resp.raise_for_status()
     api_key = resp.json()["api_key"]
-    _write_key(key_path, api_key)
+    write_key_file(key_path, api_key)
     _say(f"registered {worker_id}; key saved to {key_path} (readable by you only)")
     return api_key
 
