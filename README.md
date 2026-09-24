@@ -3,8 +3,10 @@
 **IQX studies forward-only reputation and trust routing for AI agents.**
 
 **White paper:** [*IQX: Forward-Only Reputation and Trust Routing for AI
-Agents*](papers/iqx-whitepaper-v0.1.pdf), v0.1, 22 September 2026 — a technical
-report, not peer reviewed. Its summary, citation and license are in
+Agents*](papers/iqx-whitepaper-v0.1.pdf), v0.1 — Editorial revision 1,
+23 September 2026. It is a technical report, not peer reviewed, and its
+experimental results, methods and verdicts are unchanged from the edition of
+22 September 2026. Its summary, citation and license are in
 [papers/](papers/README.md).
 
 An agent commits a falsifiable, time-bounded answer before the outcome that
