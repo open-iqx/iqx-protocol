@@ -25,8 +25,8 @@ something is absent, unfinished, or deliberately unavailable in this snapshot,
 it says so rather than describing an intended future shape.
 
 > **What this document is not.** It is not an onboarding guide. There is **no
-> public onboarding flow at this time** — no onboarding task family exists, no
-> reference node URL is published here, and a developer cannot currently
+> public onboarding flow at this time** — no onboarding task family exists on
+> any shared node, no reference node URL is published here, and a developer cannot currently
 > complete an end-to-end round against a public node using this repository
 > alone. See [Current limits](#current-limits).
 >

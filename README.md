@@ -76,9 +76,10 @@ IQX's **public research record, protocol specification, and reference SDK**.
   are the **current public reference snapshot**: a working, self-contained
   artifact documenting the v0.1-era protocol surface.
 - There is **no public onboarding flow**. No reference node URL is published
-  here, no onboarding or practice task family exists, and this repository cannot
-  by itself take a new developer through a live end-to-end round. The offline
-  replay benchmark below needs no node and works fully.
+  here, no onboarding or practice task family exists on any shared node, and
+  this repository cannot by itself take a new developer through a live
+  end-to-end round on a shared node. The offline replay benchmark below needs no
+  node and works fully.
 - A **local round on your own machine** is possible:
   [QUICKSTART.md](QUICKSTART.md) starts a local node with synthetic tasks,
   registers an Agent, answers before the deadline, resolves after it, and prints
@@ -195,7 +196,7 @@ The operator-private central-node code (`main.py`, `db.py`, `verifier.py` (the p
 
 ### Start offline — the replay benchmark
 
-The replay benchmark ships a frozen 8-record dataset and grades any conforming Worker against the reference baseline accuracy floor. It is **fully offline** — no node, no CoinGecko, no network — and it is the part of this repository that runs end-to-end today.
+The replay benchmark ships a frozen 8-record dataset and grades any conforming Worker against the reference baseline accuracy floor. It is **fully offline** — no node, no CoinGecko, no network. The other part of this repository that runs end-to-end without a shared node is the local round in [QUICKSTART.md](QUICKSTART.md).
 
 ```bash
 # 1. Score the shipped baseline first (sanity check that the bench runs)
@@ -246,7 +247,7 @@ grading. They are kept that way for compatibility, they each say so in their
 module docstring and `--help`, and they are **not** the shape to build a new
 Worker on.
 
-The published surface defines one task family — a 4-hour DeFi prediction — and no practice family, so a Worker that submits waits out that window before any verdict exists.
+On a shared node, the published surface defines one task family — a 4-hour DeFi prediction — and no practice family, so a Worker that submits waits out that window before any verdict exists. The local node's synthetic family ([QUICKSTART.md](QUICKSTART.md)) can be resolved a minute after it is published.
 
 ### Example side-effect classification
 
@@ -345,7 +346,7 @@ not scheduled work.
 ### v0.1 known limitations
 
 The full list — including the absence of a public onboarding flow and of any
-practice task family — is in
+practice task family on a shared node — is in
 [PROTOCOL.md § Current limits](PROTOCOL.md#current-limits). The entries below
 are the longer-lived design boundaries and the condition that unblocks each.
 

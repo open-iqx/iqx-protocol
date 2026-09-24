@@ -75,10 +75,10 @@ Use `--dry-run` first: it prints the same identity and target without writing.
 
 - **On a local node, the tasks have expired.** They accept answers for 60
   seconds after `python -m iqx.local publish`. Publish a new batch.
-- **No compatible task is open.** The only task family published is
-  `worker_prediction_accuracy_4h`. If you are polling for `echo` — the default
-  for `baseline_worker` — you will find nothing: **no onboarding or practice
-  task family exists.**
+- **On a shared node, no compatible task is open.** The only task family
+  published there is `worker_prediction_accuracy_4h`. If you are polling for
+  `echo` — the default for `baseline_worker` — you will find nothing: **no
+  onboarding or practice task family exists on a shared node.**
 - **You are filtering it out.** `worker_judge` filters by `--publisher-id` and
   `--verification-method`; `baseline_worker` filters by `--methods`. A filter
   that matches nothing looks exactly like an empty queue.
