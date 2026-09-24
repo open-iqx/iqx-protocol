@@ -23,6 +23,7 @@ from iqx.examples import (
     baseline_worker,
     boss_smart_money,
     identity,
+    quickstart_worker,
     self_play,
     worker_judge,
 )
@@ -42,7 +43,8 @@ from iqx.examples.identity import (
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 #: Every module under ``iqx.examples`` that can write to a node.
-WRITE_CAPABLE = (baseline_worker, worker_judge, boss_smart_money, self_play)
+WRITE_CAPABLE = (baseline_worker, worker_judge, boss_smart_money, self_play,
+                 quickstart_worker)
 
 #: Fixed ids these examples used to ship. Each is registered on at least one
 #: live node, so re-introducing any of them as a default reproduces the exact
@@ -86,6 +88,7 @@ class TestNoFixedCollidingIdentities(unittest.TestCase):
             boss_smart_money: (boss_smart_money.AGENT_ID_PREFIX,),
             self_play: (self_play.PUBLISHER_ID_PREFIX,
                         self_play.WORKER_ID_PREFIX),
+            quickstart_worker: (quickstart_worker.WORKER_ID_PREFIX,),
         }
         for module, module_prefixes in prefixes.items():
             for prefix in module_prefixes:
@@ -114,6 +117,7 @@ class TestNoFixedCollidingIdentities(unittest.TestCase):
             worker_judge: ("IQX_JUDGE_WORKER_ID",),
             boss_smart_money: ("IQX_BOSS_AGENT_ID",),
             self_play: ("IQX_SELFPLAY_PUBLISHER_ID", "IQX_SELFPLAY_WORKER_ID"),
+            quickstart_worker: ("IQX_QUICKSTART_WORKER_ID",),
         }
         for module, env_vars in expected.items():
             source = Path(module.__file__).read_text()
@@ -430,6 +434,7 @@ class TestSideEffectClassification(unittest.TestCase):
         worker_judge: SideEffect.WORKER,
         boss_smart_money: SideEffect.BOSS,
         self_play: SideEffect.BOSS,
+        quickstart_worker: SideEffect.WORKER,
     }
 
     def test_each_module_declares_its_class(self):

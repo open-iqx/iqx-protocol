@@ -7,13 +7,15 @@ license = { file = "LICENSE" }
 requires-python = ">=3.9"
 dependencies = [
     "sqlmodel>=0.0.16",
-    "fastapi>=0.110",       # only for the schema types — runtime not used in SDK
+    "fastapi>=0.110",       # schema types, and the local node's HTTP app (iqx.local)
     "requests>=2.31",
     "pydantic>=2.6",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+# The local development node (`python -m iqx.local serve`) needs an ASGI server.
+local = ["uvicorn>=0.23"]
+dev = ["pytest>=8.0", "uvicorn>=0.23", "httpx>=0.25"]
 
 [project.urls]
 "Source" = "https://github.com/open-iqx/iqx-protocol"

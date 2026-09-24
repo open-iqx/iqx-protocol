@@ -61,6 +61,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 PROTOCOL_MD = REPO_ROOT / "PROTOCOL.md"
 TROUBLESHOOTING_MD = REPO_ROOT / "TROUBLESHOOTING.md"
 README_MD = REPO_ROOT / "README.md"
+QUICKSTART_MD = REPO_ROOT / "QUICKSTART.md"
 
 
 def _read(path: Path) -> str:
@@ -233,7 +234,7 @@ class TestDocumentationMatchesVerifiedContract(unittest.TestCase):
         """Every relative markdown link in the shipped docs must point at a
         file that exists."""
         pattern = re.compile(r"\[[^\]]+\]\((?!https?://)([^)#\s]+)")
-        for doc in (PROTOCOL_MD, TROUBLESHOOTING_MD, README_MD):
+        for doc in (PROTOCOL_MD, TROUBLESHOOTING_MD, README_MD, QUICKSTART_MD):
             for target in pattern.findall(_read(doc)):
                 self.assertTrue(
                     (REPO_ROOT / target).exists(),

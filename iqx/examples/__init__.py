@@ -21,16 +21,22 @@ its ``--help`` output:
 - ``iqx.examples.self_play`` — **Boss / task publishing**, operator-oriented.
   Dual-role demo exercising the ``publisher_id != worker_id`` codepath via the
   ``echo`` verification method.
+- ``iqx.examples.quickstart_worker`` — **Worker registration / submission**.
+  Minimal Worker on the competing-submissions path
+  (``POST /tasks/{task_id}/submissions``), with a version-bound identity and a
+  read-only ``--report`` of its graded record. Answers only the local node's
+  synthetic tasks; see ``QUICKSTART.md``. Start here.
 - ``iqx.examples.identity`` — not an agent: the shared identity resolver and
   write safeguards the examples above use.
 
-**All four agent examples use the legacy single-claim path**
+**The four other agent examples use the legacy single-claim path**
 (``/claim`` → ``/submit``), which is not the lifecycle a competing-submissions
 Worker uses. See ``PROTOCOL.md`` for the current lifecycle before copying one
 as a starting point.
 
 Agent ids are resolved per run and default to a freshly generated value, so
-two consecutive runs never collide on an already-registered id. Writing to any
+two consecutive runs never collide on an already-registered id. The exception
+is ``quickstart_worker``, whose default is bound to its own source file. Writing to any
 non-loopback node requires an explicit opt-in — see
 ``iqx.examples.identity.guard_writes``.
 """

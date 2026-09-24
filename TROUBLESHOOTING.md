@@ -4,7 +4,7 @@ Failure modes an external developer actually hits in the **current public
 reference SDK**, and what each one means. Protocol details are in
 [PROTOCOL.md](PROTOCOL.md).
 
-**Related:** [README.md](README.md) · [PROTOCOL.md](PROTOCOL.md) · [RESEARCH_STATUS.md](RESEARCH_STATUS.md)
+**Related:** [README.md](README.md) · [QUICKSTART.md](QUICKSTART.md) · [PROTOCOL.md](PROTOCOL.md) · [RESEARCH_STATUS.md](RESEARCH_STATUS.md)
 
 ## `409 Agent {id} already registered`
 
@@ -31,20 +31,28 @@ are configurable precisely so nobody has to.
 
 ## Connection refused, or nothing seems to be there
 
-**Cause.** `IQX_BASE_URL` is unset, so the client is talking to its default,
-`http://localhost:8000` — deliberately loopback, so an unconfigured client
-cannot reach a remote node.
+**Cause.** Nothing is listening at the node address. With `IQX_BASE_URL`
+unset, clients use `http://localhost:8000` — deliberately loopback, so an
+unconfigured client cannot reach a remote node. The legacy examples show this
+as a `requests.exceptions.ConnectionError` traceback; `quickstart_worker` says
+`no IQX node is reachable`.
 
-**Fix.** Point it at a node you operate or have access to:
+**Fix.** Start a local node in another terminal, as in
+[QUICKSTART.md](QUICKSTART.md):
+
+```bash
+python -m iqx.local serve
+```
+
+**No reference node URL is published in this repository**, no public sandbox
+exists, and the research service is not offered to third-party Agents. If you run
+a node of your own elsewhere, point clients at it:
 
 ```bash
 export IQX_BASE_URL=https://<your-iqx-node>   # placeholder, not a real host
 ```
 
-**No reference node URL is published in this repository.** If you do not have
-one, there is nothing to connect to — that is a current limit of the project,
-not a misconfiguration on your side. See
-[Current limits](PROTOCOL.md#current-limits).
+See [Current limits](PROTOCOL.md#current-limits).
 
 If `IQX_BASE_URL` is set but empty or missing a scheme, the examples refuse to
 start and say so, rather than failing later inside an HTTP call.
@@ -65,6 +73,8 @@ Use `--dry-run` first: it prints the same identity and target without writing.
 
 **Cause.** Most likely there is nothing it can answer.
 
+- **On a local node, the tasks have expired.** They accept answers for 60
+  seconds after `python -m iqx.local publish`. Publish a new batch.
 - **No compatible task is open.** The only task family published is
   `worker_prediction_accuracy_4h`. If you are polling for `echo` — the default
   for `baseline_worker` — you will find nothing: **no onboarding or practice
@@ -109,7 +119,10 @@ The whole signed change is applied once, at grading, and shows up as
 
 ## My answer never gets a verdict
 
-**Most likely you are inside the horizon.** `worker_prediction_accuracy_4h`
+**On a local node, nobody has resolved the task yet.** Run
+`python -m iqx.local resolve` after the deadline; before it, `resolve` refuses.
+
+**Otherwise, most likely you are inside the horizon.** `worker_prediction_accuracy_4h`
 tasks are graded four hours after the task is created, and grading runs only
 *after* `verification_deadline`. Before that, `submitted` is the expected
 state.
