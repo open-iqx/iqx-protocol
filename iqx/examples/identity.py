@@ -213,6 +213,24 @@ def key_path_for(agent_id: str, *, state_dir: Optional[Path] = None) -> Path:
     return base / name
 
 
+def write_key_file(path: Path, api_key: str) -> None:
+    """Write a credential to ``path``, readable and writable by its owner only.
+
+    The file holds the only copy of a key the node will never show again, so it
+    must not be readable by other local users. The mode is set on the open file
+    as well as at creation, because ``O_CREAT`` leaves an existing file's mode
+    as it was.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        os.write(fd, api_key.encode("utf-8"))
+    finally:
+        os.close(fd)
+
+
 def add_identity_args(
     parser: argparse.ArgumentParser,
     *,

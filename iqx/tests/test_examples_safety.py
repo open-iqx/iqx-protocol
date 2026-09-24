@@ -15,7 +15,10 @@ HTTP call is made.
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import stat
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -284,6 +287,35 @@ class TestCredentialFilenameIsInjective(unittest.TestCase):
             self.assertNotIn(name, names,
                              f"{agent_id!r} collides with {names.get(name)!r}")
             names[name] = agent_id
+
+
+@unittest.skipUnless(hasattr(os, "fchmod"), "POSIX file modes only")
+class TestCredentialFilesAreOwnerOnly(unittest.TestCase):
+    """A cached key is the only copy of a credential the node never shows again."""
+
+    def _mode(self, path: Path) -> int:
+        return stat.S_IMODE(path.stat().st_mode)
+
+    def test_a_new_key_file_is_owner_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "state" / "w.key"
+            identity.write_key_file(path, "k1")
+            self.assertEqual(path.read_text(), "k1")
+            self.assertEqual(self._mode(path), 0o600)
+
+    def test_an_existing_readable_key_file_is_tightened_on_rewrite(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "w.key"
+            path.write_text("old")
+            os.chmod(path, 0o644)
+            identity.write_key_file(path, "new")
+            self.assertEqual(path.read_text(), "new")
+            self.assertEqual(self._mode(path), 0o600)
+
+    def test_no_example_writes_a_key_any_other_way(self):
+        for path in _example_sources():
+            self.assertNotIn("write_text(api_key)", path.read_text(),
+                             f"{path.name} writes a key without write_key_file")
 
 
 class TestDefaultTargetIsNotProduction(unittest.TestCase):

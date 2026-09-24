@@ -102,6 +102,10 @@ identity overwrite the first's credential, which is unrecoverable.
 Precedence for the state directory: `IQX_STATE_DIR`, then `<source-tree>/agents/state`
 when running from a checkout that has one, then `~/.iqx/state`.
 
+The examples write the key file readable and writable by its owner only
+(`0600`). Key files written by earlier versions keep the mode they were created
+with; tighten them with `chmod 600` on each `.key` file.
+
 Losing the key file is not recoverable from the client side: re-registering the
 same id returns 409, and rotation requires the key you no longer have.
 
